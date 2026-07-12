@@ -1,12 +1,15 @@
 /**
- * @file    pins.h
- * @brief   MicroMaze 3 · STM32F411CEU6 Black Pill · Pin Definitions
- * * Single source of truth for all physical hardware connections. This file 
- * contains exclusively register mappings, peripheral associations, constant 
- * configurations, and documentation. No driver logic or helper functions are 
- * permitted here.
+ * @file pins.h
+ * @brief Hardware pin and peripheral mapping for the STM32F411CEU6 Black Pill
+ * Micromouse controller.
  *
- * @note All configurations are verified for STM32CubeMX compatibility.
+ * This file is the single source of truth for all GPIO pins, alternate
+ * functions, peripheral instances, timer channels, and ADC channel
+ * assignments. It contains hardware mapping only and intentionally excludes
+ * driver code, executable statements, timing configuration, and application
+ * logic.
+ *
+ * @copyright Copyright (c) 2026
  */
 
 #ifndef PINS_H
@@ -16,250 +19,187 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
 #include "stm32f4xx_hal.h"
 
-/* ===================================================================== *
- * SECTION 1  —  MOTOR PWM (TIM1, APB2 = 100 MHz)
- * Configuration: Prescaler = 0, ARR = 4999 -> 20 kHz PWM Frequency
- * ===================================================================== */
+/* ========================================================================== */
+/* Peripheral instances                                                        */
+/* ========================================================================== */
 
-/** @name Left Motor PWM Definitions */
-/**@{*/
-#define MOTOR_L_PWM_PORT        GPIOA            /**< GPIO Port for Left Motor PWM */
-#define MOTOR_L_PWM_PIN         GPIO_PIN_8       /**< GPIO Pin for Left Motor PWM */
-#define MOTOR_L_PWM_AF          GPIO_AF1_TIM1    /**< Alternate Function mapping to TIM1 */
-#define MOTOR_L_TIM             TIM1             /**< Timer instance for Left Motor */
-#define MOTOR_L_TIM_CHANNEL     TIM_CHANNEL_1    /**< Timer Channel for Left Motor */
-/**@}*/
+#define PIN_SENSOR_ADC_INSTANCE        ADC1 /**< ADC peripheral for IR and battery sensing. */
+#define PIN_IMU_SPI_INSTANCE           SPI2 /**< SPI peripheral for the MPU6500. */
+#define PIN_OLED_I2C_INSTANCE          I2C1 /**< I2C peripheral for the SSD1306 OLED. */
 
-/** @name Right Motor PWM Definitions */
-/**@{*/
-#define MOTOR_R_PWM_PORT        GPIOA            /**< GPIO Port for Right Motor PWM */
-#define MOTOR_R_PWM_PIN         GPIO_PIN_9       /**< GPIO Pin for Right Motor PWM */
-#define MOTOR_R_PWM_AF          GPIO_AF1_TIM1    /**< Alternate Function mapping to TIM1 */
-#define MOTOR_R_TIM             TIM1             /**< Timer instance for Right Motor */
-#define MOTOR_R_TIM_CHANNEL     TIM_CHANNEL_2    /**< Timer Channel for Right Motor */
-/**@}*/
+/* Motor driver: TB6612FNG                                                     */
+/* ========================================================================== */
 
-/** @name Shared Motor Timer Constants */
-/**@{*/
-#define MOTOR_TIM_INSTANCE      TIM1             /**< Shared Timer peripheral instance */
-#define MOTOR_TIM_PRESCALER     0U               /**< Clock prescaler value */
-#define MOTOR_TIM_PERIOD        4999U            /**< Auto-reload value for 20 kHz frequency */
-/**@}*/
+#define PIN_LEFT_MOTOR_IN1_PORT        GPIOB /**< TB6612FNG AIN1 GPIO port. */
+#define PIN_LEFT_MOTOR_IN1_PIN         GPIO_PIN_12 /**< TB6612FNG AIN1 GPIO pin. */
+#define PIN_LEFT_MOTOR_IN2_PORT        GPIOB /**< TB6612FNG AIN2 GPIO port. */
+#define PIN_LEFT_MOTOR_IN2_PIN         GPIO_PIN_13 /**< TB6612FNG AIN2 GPIO pin. */
+#define PIN_RIGHT_MOTOR_IN1_PORT       GPIOB /**< TB6612FNG BIN1 GPIO port. */
+#define PIN_RIGHT_MOTOR_IN1_PIN        GPIO_PIN_14 /**< TB6612FNG BIN1 GPIO pin. */
+#define PIN_RIGHT_MOTOR_IN2_PORT       GPIOB /**< TB6612FNG BIN2 GPIO port. */
+#define PIN_RIGHT_MOTOR_IN2_PIN        GPIO_PIN_15 /**< TB6612FNG BIN2 GPIO pin. */
 
-/* ===================================================================== *
- * SECTION 2  —  MOTOR DIRECTION PINS (H-Bridge Interface)
- * ===================================================================== */
+#define PIN_TB6612_STBY_PORT           GPIOB /**< TB6612FNG STBY GPIO port. */
+#define PIN_TB6612_STBY_PIN            GPIO_PIN_11 /**< TB6612FNG STBY GPIO pin. */
 
-/** @name Left Motor Direction Control */
-/**@{*/
-#define MOTOR_L_IN1_PORT        GPIOB            /**< GPIO Port for Left Motor AIN1 */
-#define MOTOR_L_IN1_PIN         GPIO_PIN_12      /**< GPIO Pin for Left Motor AIN1 */
-#define MOTOR_L_IN2_PORT        GPIOB            /**< GPIO Port for Left Motor AIN2 */
-#define MOTOR_L_IN2_PIN         GPIO_PIN_13      /**< GPIO Pin for Left Motor AIN2 */
-/**@}*/
+/* ========================================================================== */
+/* Motor PWM: TIM1                                                            */
+/* ========================================================================== */
 
-/** @name Right Motor Direction Control */
-/**@{*/
-#define MOTOR_R_IN1_PORT        GPIOB            /**< GPIO Port for Right Motor BIN1 */
-#define MOTOR_R_IN1_PIN         GPIO_PIN_14      /**< GPIO Pin for Right Motor BIN1 */
-#define MOTOR_R_IN2_PORT        GPIOB            /**< GPIO Port for Right Motor BIN2 */
-#define MOTOR_R_IN2_PIN         GPIO_PIN_15      /**< GPIO Pin for Right Motor BIN2 */
-/**@}*/
+#define PIN_MOTOR_PWM_TIMER            TIM1 /**< Shared motor PWM timer instance. */
+#define PIN_LEFT_MOTOR_PWM_CHANNEL     TIM_CHANNEL_1 /**< TIM1 channel for left motor PWM. */
+#define PIN_RIGHT_MOTOR_PWM_CHANNEL    TIM_CHANNEL_2 /**< TIM1 channel for right motor PWM. */
 
-/* ===================================================================== *
- * SECTION 3  —  MOTOR STANDBY PIN
- * ===================================================================== */
+#define PIN_LEFT_MOTOR_PWM_PORT        GPIOA /**< Left motor PWM GPIO port. */
+#define PIN_LEFT_MOTOR_PWM_PIN         GPIO_PIN_8 /**< Left motor PWM GPIO pin. */
+#define PIN_LEFT_MOTOR_PWM_AF          GPIO_AF1_TIM1 /**< PA8 alternate function: TIM1_CH1. */
+#define PIN_RIGHT_MOTOR_PWM_PORT       GPIOA /**< Right motor PWM GPIO port. */
+#define PIN_RIGHT_MOTOR_PWM_PIN        GPIO_PIN_9 /**< Right motor PWM GPIO pin. */
+#define PIN_RIGHT_MOTOR_PWM_AF         GPIO_AF1_TIM1 /**< PA9 alternate function: TIM1_CH2. */
 
-#define MOTOR_STBY_PORT         GPIOB            /**< GPIO Port for Motor Driver Standby */
-#define MOTOR_STBY_PIN          GPIO_PIN_10      /**< GPIO Pin for Motor Driver Standby */
+/* ========================================================================== */
+/* Encoders: TIM2 and TIM4                                                    */
+/* ========================================================================== */
 
-/* ===================================================================== *
- * SECTION 4  —  ENCODERS (TIM2 32-bit / TIM4 16-bit)
- * ===================================================================== */
+#define PIN_LEFT_ENCODER_TIMER         TIM2 /**< Left encoder timer instance. */
+#define PIN_LEFT_ENCODER_CHANNEL_A     TIM_CHANNEL_1 /**< Left encoder timer channel A. */
+#define PIN_LEFT_ENCODER_CHANNEL_B     TIM_CHANNEL_2 /**< Left encoder timer channel B. */
+#define PIN_LEFT_ENCODER_A_PORT        GPIOA /**< Left encoder channel A GPIO port. */
+#define PIN_LEFT_ENCODER_A_PIN         GPIO_PIN_0 /**< Left encoder channel A GPIO pin. */
+#define PIN_LEFT_ENCODER_A_AF          GPIO_AF1_TIM2 /**< PA0 alternate function: TIM2_CH1. */
+#define PIN_LEFT_ENCODER_B_PORT        GPIOA /**< Left encoder channel B GPIO port. */
+#define PIN_LEFT_ENCODER_B_PIN         GPIO_PIN_1 /**< Left encoder channel B GPIO pin. */
+#define PIN_LEFT_ENCODER_B_AF          GPIO_AF1_TIM2 /**< PA1 alternate function: TIM2_CH2. */
 
-/** @name Left Encoder Definitions (32-bit Quadrature) */
-/**@{*/
-#define ENC_L_A_PORT            GPIOA            /**< GPIO Port for Left Encoder Channel A */
-#define ENC_L_A_PIN             GPIO_PIN_0       /**< GPIO Pin for Left Encoder Channel A */
-#define ENC_L_A_AF              GPIO_AF1_TIM2    /**< Alternate function mapping to TIM2 */
-#define ENC_L_B_PORT            GPIOA            /**< GPIO Port for Left Encoder Channel B */
-#define ENC_L_B_PIN             GPIO_PIN_1       /**< GPIO Pin for Left Encoder Channel B */
-#define ENC_L_B_AF              GPIO_AF1_TIM2    /**< Alternate function mapping to TIM2 */
-#define ENC_L_TIM               TIM2             /**< Timer instance used for Left Encoder */
-#define ENC_L_TIM_CHANNEL_A     TIM_CHANNEL_1
-#define ENC_L_TIM_CHANNEL_B     TIM_CHANNEL_2
-/**@}*/
+#define PIN_RIGHT_ENCODER_TIMER        TIM4 /**< Right encoder timer instance. */
+#define PIN_RIGHT_ENCODER_CHANNEL_A    TIM_CHANNEL_1 /**< Right encoder timer channel A. */
+#define PIN_RIGHT_ENCODER_CHANNEL_B    TIM_CHANNEL_2 /**< Right encoder timer channel B. */
+#define PIN_RIGHT_ENCODER_A_PORT       GPIOB /**< Right encoder channel A GPIO port. */
+#define PIN_RIGHT_ENCODER_A_PIN        GPIO_PIN_6 /**< Right encoder channel A GPIO pin. */
+#define PIN_RIGHT_ENCODER_A_AF         GPIO_AF2_TIM4 /**< PB6 alternate function: TIM4_CH1. */
+#define PIN_RIGHT_ENCODER_B_PORT       GPIOB /**< Right encoder channel B GPIO port. */
+#define PIN_RIGHT_ENCODER_B_PIN        GPIO_PIN_7 /**< Right encoder channel B GPIO pin. */
+#define PIN_RIGHT_ENCODER_B_AF         GPIO_AF2_TIM4 /**< PB7 alternate function: TIM4_CH2. */
 
-/** @name Right Encoder Definitions (16-bit Quadrature + Overflow Track) */
-/**@{*/
-#define ENC_R_A_PORT            GPIOB            /**< GPIO Port for Right Encoder Channel A */
-#define ENC_R_A_PIN             GPIO_PIN_6       /**< GPIO Pin for Right Encoder Channel A */
-#define ENC_R_A_AF              GPIO_AF2_TIM4    /**< Alternate function mapping to TIM4 */
-#define ENC_R_B_PORT            GPIOB            /**< GPIO Port for Right Encoder Channel B */
-#define ENC_R_B_PIN             GPIO_PIN_7       /**< GPIO Pin for Right Encoder Channel B */
-#define ENC_R_B_AF              GPIO_AF2_TIM4    /**< Alternate function mapping to TIM4 */
-#define ENC_R_TIM               TIM4             /**< Timer instance used for Right Encoder */
-#define ENC_R_MAX_COUNT         65535U           /**< Maximum counter limit before overflow */
-#define ENC_R_TIM_CHANNEL_A     TIM_CHANNEL_1
-#define ENC_R_TIM_CHANNEL_B     TIM_CHANNEL_2
-/**@}*/
+/* ========================================================================== */
+/* IR emitters                                                                 */
+/* ========================================================================== */
 
-/* ===================================================================== *
- * SECTION 5  —  CONTROL LOOP TIMER (Internal Ticker)
- * ===================================================================== */
+#define PIN_IR_EMIT_DIAG_RIGHT_PORT    GPIOC /**< Right diagonal emitter GPIO port. */
+#define PIN_IR_EMIT_DIAG_RIGHT_PIN     GPIO_PIN_1 /**< Right diagonal emitter GPIO pin. */
+#define PIN_IR_EMIT_DIAG_LEFT_PORT     GPIOA /**< Left diagonal emitter GPIO port. */
+#define PIN_IR_EMIT_DIAG_LEFT_PIN      GPIO_PIN_11 /**< Left diagonal emitter GPIO pin. */
+#define PIN_IR_EMIT_FRONT_RIGHT_PORT   GPIOA /**< Front-right emitter GPIO port. */
+#define PIN_IR_EMIT_FRONT_RIGHT_PIN    GPIO_PIN_15 /**< Front-right emitter GPIO pin. */
+#define PIN_IR_EMIT_FRONT_LEFT_PORT    GPIOB /**< Front-left emitter GPIO port. */
+#define PIN_IR_EMIT_FRONT_LEFT_PIN     GPIO_PIN_3 /**< Front-left emitter GPIO pin. */
+#define PIN_IR_EMIT_SIDE_RIGHT_PORT    GPIOB /**< Right-side emitter GPIO port. */
+#define PIN_IR_EMIT_SIDE_RIGHT_PIN     GPIO_PIN_4 /**< Right-side emitter GPIO pin. */
+#define PIN_IR_EMIT_SIDE_LEFT_PORT     GPIOB /**< Left-side emitter GPIO port. */
+#define PIN_IR_EMIT_SIDE_LEFT_PIN      GPIO_PIN_5 /**< Left-side emitter GPIO pin. */
 
-#define CTRL_TIM_INSTANCE       TIM5             /**< Timer peripheral for PID loop ticker */
-#define CTRL_TIM_PRESCALER      99U              /**< Prescaler mapping down to 1 MHz clock frequency */
-#define CTRL_TIM_PERIOD         999U             /**< Period configuration creating a 1 kHz interrupt */
-#define CTRL_TIM_PRIORITY       1U               /**< Preemption priority configuration for NVIC */
+/* ========================================================================== */
+/* IR receivers: ADC1                                                          */
+/* ========================================================================== */
 
-/* ===================================================================== *
- * SECTION 6  —  IR EMITTERS (Active High Gate Controls)
- * ===================================================================== */
+/* ADC input assignments */
+#define PIN_IR_FRONT_LEFT_PORT         GPIOA /**< Front-left IR receiver GPIO port. */
+#define PIN_IR_FRONT_LEFT_PIN          GPIO_PIN_5 /**< Front-left IR receiver GPIO pin. */
+#define PIN_IR_FRONT_LEFT_ADC_CHANNEL  ADC_CHANNEL_5 /**< Front-left IR receiver ADC1 channel. */
 
-#define IR_EMIT_R_ANGLE_PORT    GPIOA            /**< GPIO Port for Right Angle Emitter */
-#define IR_EMIT_R_ANGLE_PIN     GPIO_PIN_10      /**< GPIO Pin for Right Angle Emitter */
+#define PIN_IR_FRONT_RIGHT_PORT        GPIOA /**< Front-right IR receiver GPIO port. */
+#define PIN_IR_FRONT_RIGHT_PIN         GPIO_PIN_4 /**< Front-right IR receiver GPIO pin. */
+#define PIN_IR_FRONT_RIGHT_ADC_CHANNEL ADC_CHANNEL_4 /**< Front-right IR receiver ADC1 channel. */
 
-#define IR_EMIT_L_ANGLE_PORT    GPIOA            /**< GPIO Port for Left Angle Emitter */
-#define IR_EMIT_L_ANGLE_PIN     GPIO_PIN_11      /**< GPIO Pin for Left Angle Emitter */
+#define PIN_IR_SIDE_LEFT_PORT          GPIOA /**< Left-side IR receiver GPIO port. */
+#define PIN_IR_SIDE_LEFT_PIN           GPIO_PIN_3 /**< Left-side IR receiver GPIO pin. */
+#define PIN_IR_SIDE_LEFT_ADC_CHANNEL   ADC_CHANNEL_3 /**< Left-side IR receiver ADC1 channel. */
 
-#define IR_EMIT_RF_PORT         GPIOA            /**< GPIO Port for Right Front Emitter (JTAG Override) */
-#define IR_EMIT_RF_PIN          GPIO_PIN_15      /**< GPIO Pin for Right Front Emitter (JTAG Override) */
+#define PIN_IR_SIDE_RIGHT_PORT         GPIOA /**< Right-side IR receiver GPIO port. */
+#define PIN_IR_SIDE_RIGHT_PIN          GPIO_PIN_2 /**< Right-side IR receiver GPIO pin. */
+#define PIN_IR_SIDE_RIGHT_ADC_CHANNEL  ADC_CHANNEL_2 /**< Right-side IR receiver ADC1 channel. */
 
-#define IR_EMIT_LF_PORT         GPIOB            /**< GPIO Port for Left Front Emitter (JTAG Override) */
-#define IR_EMIT_LF_PIN          GPIO_PIN_3       /**< GPIO Pin for Left Front Emitter (JTAG Override) */
+#define PIN_IR_DIAG_LEFT_PORT          GPIOA /**< Left diagonal IR receiver GPIO port. */
+#define PIN_IR_DIAG_LEFT_PIN           GPIO_PIN_7 /**< Left diagonal IR receiver GPIO pin. */
+#define PIN_IR_DIAG_LEFT_ADC_CHANNEL   ADC_CHANNEL_7 /**< Left diagonal IR receiver ADC1 channel. */
 
-#define IR_EMIT_R_SIDE_PORT     GPIOB            /**< GPIO Port for Right Side Emitter */
-#define IR_EMIT_R_SIDE_PIN      GPIO_PIN_4       /**< GPIO Pin for Right Side Emitter */
+#define PIN_IR_DIAG_RIGHT_PORT         GPIOA /**< Right diagonal IR receiver GPIO port. */
+#define PIN_IR_DIAG_RIGHT_PIN          GPIO_PIN_6 /**< Right diagonal IR receiver GPIO pin. */
+#define PIN_IR_DIAG_RIGHT_ADC_CHANNEL  ADC_CHANNEL_6 /**< Right diagonal IR receiver ADC1 channel. */
 
-#define IR_EMIT_L_SIDE_PORT     GPIOB            /**< GPIO Port for Left Side Emitter */
-#define IR_EMIT_L_SIDE_PIN      GPIO_PIN_5       /**< GPIO Pin for Left Side Emitter */
+/* ========================================================================== */
+/* MPU6500 SPI interface                                                       */
+/* ========================================================================== */
 
-/* ===================================================================== *
- * SECTION 7  —  IR RECEIVERS (ADC1 Multi-channel DMA Scan)
- * ===================================================================== */
+#define PIN_IMU_SCK_PORT               GPIOB /**< MPU6500 SPI clock GPIO port. */
+#define PIN_IMU_SCK_PIN                GPIO_PIN_10 /**< MPU6500 SPI clock GPIO pin. */
+#define PIN_IMU_SCK_AF                 GPIO_AF5_SPI2 /**< PB10 alternate function: SPI2_SCK. */
+#define PIN_IMU_MISO_PORT              GPIOC /**< MPU6500 SPI MISO GPIO port. */
+#define PIN_IMU_MISO_PIN               GPIO_PIN_2 /**< MPU6500 SPI MISO GPIO pin. */
+#define PIN_IMU_MISO_AF                GPIO_AF5_SPI2 /**< PC2 alternate function: SPI2_MISO. */
+#define PIN_IMU_MOSI_PORT              GPIOC /**< MPU6500 SPI MOSI GPIO port. */
+#define PIN_IMU_MOSI_PIN               GPIO_PIN_3 /**< MPU6500 SPI MOSI GPIO pin. */
+#define PIN_IMU_MOSI_AF                GPIO_AF5_SPI2 /**< PC3 alternate function: SPI2_MOSI. */
+#define PIN_IMU_CS_PORT                GPIOA /**< MPU6500 chip-select GPIO port. */
+#define PIN_IMU_CS_PIN                 GPIO_PIN_10 /**< MPU6500 chip-select GPIO pin. */
 
-/** @name DMA Circular Buffer Index Mapping */
-/**@{*/
-#define IR_IDX_RS               0U               /**< Buffer Index for Right Side Sensor */
-#define IR_IDX_LS               1U               /**< Buffer Index for Left Side Sensor */
-#define IR_IDX_RF               2U               /**< Buffer Index for Right Front Sensor */
-#define IR_IDX_LF               3U               /**< Buffer Index for Left Front Sensor */
-#define IR_IDX_R_ANG            4U               /**< Buffer Index for Right Angle Sensor */
-#define IR_IDX_L_ANG            5U               /**< Buffer Index for Left Angle Sensor */
-#define IR_IDX_BATT             6U               /**< Buffer Index for Battery Voltage Sensor */
-#define IR_ADC_BUF_LEN          7U               /**< Total DMA Scan Conversion Length */
-/**@}*/
+/* ========================================================================== */
+/* SSD1306 OLED: I2C1                                                         */
+/* ========================================================================== */
 
-/** @name Receiver Pin Hardware Maps */
-/**@{*/
-#define IR_RECV_RS_PORT         GPIOA            /**< GPIO Port for Right Side Phototransistor */
-#define IR_RECV_RS_PIN          GPIO_PIN_2       /**< GPIO Pin for Right Side Phototransistor */
-#define IR_RECV_RS_ADC_CH       ADC_CHANNEL_2    /**< ADC Channel for Right Side Sensor */
-#define IR_RECV_RS_ADC_RANK     1U               /**< Scan Sequence Rank for Right Side Sensor */
+#define PIN_OLED_SCL_PORT              GPIOB /**< OLED I2C clock GPIO port. */
+#define PIN_OLED_SCL_PIN               GPIO_PIN_8 /**< OLED I2C clock GPIO pin. */
+#define PIN_OLED_SCL_AF                GPIO_AF4_I2C1 /**< PB8 alternate function: I2C1_SCL. */
+#define PIN_OLED_SDA_PORT              GPIOB /**< OLED I2C data GPIO port. */
+#define PIN_OLED_SDA_PIN               GPIO_PIN_9 /**< OLED I2C data GPIO pin. */
+#define PIN_OLED_SDA_AF                GPIO_AF4_I2C1 /**< PB9 alternate function: I2C1_SDA. */
+#define PIN_OLED_I2C_ADDRESS           (0x3CU) /**< SSD1306 seven-bit I2C address. */
 
-#define IR_RECV_LS_PORT         GPIOA            /**< GPIO Port for Left Side Phototransistor */
-#define IR_RECV_LS_PIN          GPIO_PIN_3       /**< GPIO Pin for Left Side Phototransistor */
-#define IR_RECV_LS_ADC_CH       ADC_CHANNEL_3    /**< ADC Channel for Left Side Sensor */
-#define IR_RECV_LS_ADC_RANK     2U               /**< Scan Sequence Rank for Left Side Sensor */
+/* ========================================================================== */
+/* Battery monitor: ADC1                                                      */
+/* ========================================================================== */
 
-#define IR_RECV_RF_PORT         GPIOA            /**< GPIO Port for Right Front Phototransistor */
-#define IR_RECV_RF_PIN          GPIO_PIN_4       /**< GPIO Pin for Right Front Phototransistor */
-#define IR_RECV_RF_ADC_CH       ADC_CHANNEL_4    /**< ADC Channel for Right Front Sensor */
-#define IR_RECV_RF_ADC_RANK     3U               /**< Scan Sequence Rank for Right Front Sensor */
+#define PIN_BATTERY_MONITOR_PORT       GPIOB /**< Battery-divider ADC GPIO port. */
+#define PIN_BATTERY_MONITOR_PIN        GPIO_PIN_0 /**< Battery-divider ADC GPIO pin. */
+#define PIN_BATTERY_MONITOR_ADC_CHANNEL ADC_CHANNEL_8 /**< Battery-divider ADC1 channel. */
 
-#define IR_RECV_LF_PORT         GPIOA            /**< GPIO Port for Left Front Phototransistor */
-#define IR_RECV_LF_PIN          GPIO_PIN_5       /**< GPIO Pin for Left Front Phototransistor */
-#define IR_RECV_LF_ADC_CH       ADC_CHANNEL_5    /**< ADC Channel for Left Front Sensor */
-#define IR_RECV_LF_ADC_RANK     4U               /**< Scan Sequence Rank for Left Front Sensor */
+/* ========================================================================== */
+/* User interface                                                              */
+/* ========================================================================== */
 
-#define IR_RECV_R_ANG_PORT      GPIOA            /**< GPIO Port for Right Angle Phototransistor */
-#define IR_RECV_R_ANG_PIN       GPIO_PIN_6       /**< GPIO Pin for Right Angle Phototransistor */
-#define IR_RECV_R_ANG_ADC_CH    ADC_CHANNEL_6    /**< ADC Channel for Right Angle Sensor */
-#define IR_RECV_R_ANG_ADC_RANK  5U               /**< Scan Sequence Rank for Right Angle Sensor */
+#define PIN_DIP_1_PORT                 GPIOA /**< DIP switch 1 GPIO port. */
+#define PIN_DIP_1_PIN                  GPIO_PIN_12 /**< DIP switch 1 GPIO pin. */
+#define PIN_DIP_2_PORT                 GPIOB /**< DIP switch 2 GPIO port. */
+#define PIN_DIP_2_PIN                  GPIO_PIN_2 /**< DIP switch 2 GPIO pin. */
+#define PIN_DIP_3_PORT                 GPIOC /**< DIP switch 3 GPIO port. */
+#define PIN_DIP_3_PIN                  GPIO_PIN_14 /**< DIP switch 3 GPIO pin. */
+#define PIN_DIP_4_PORT                 GPIOC /**< DIP switch 4 GPIO port. */
+#define PIN_DIP_4_PIN                  GPIO_PIN_0 /**< DIP switch 4 GPIO pin. */
 
-#define IR_RECV_L_ANG_PORT      GPIOA            /**< GPIO Port for Left Angle Phototransistor */
-#define IR_RECV_L_ANG_PIN       GPIO_PIN_7       /**< GPIO Pin for Left Angle Phototransistor */
-#define IR_RECV_L_ANG_ADC_CH    ADC_CHANNEL_7    /**< ADC Channel for Left Angle Sensor */
-#define IR_RECV_L_ANG_ADC_RANK  6U               /**< Scan Sequence Rank for Left Angle Sensor */
+#define PIN_BUTTON_PORT                GPIOC /**< User/test button GPIO port. */
+#define PIN_BUTTON_PIN                 GPIO_PIN_15 /**< User/test button GPIO pin. */
 
-#define IR_ADC_INSTANCE         ADC1             /**< ADC Peripheral Instance for Scanning Array */
-/**@}*/
+#define PIN_LED_PORT                   GPIOC /**< Onboard status LED GPIO port. */
+#define PIN_LED_PIN                    GPIO_PIN_13 /**< Onboard status LED GPIO pin. */
 
-/* ===================================================================== *
- * SECTION 8  —  BATTERY VOLTAGE ADC
- * ===================================================================== */
+/* ========================================================================== */
+/* Buzzer: TIM3                                                               */
+/* ========================================================================== */
 
-#define BATT_ADC_PORT           GPIOB            /**< GPIO Port for Voltage Divider Node */
-#define BATT_ADC_PIN            GPIO_PIN_0       /**< GPIO Pin for Voltage Divider Node */
-#define BATT_ADC_CH             ADC_CHANNEL_8    /**< ADC Channel mapped to Divider Node */
-#define BATT_ADC_RANK           7U               /**< Final Scan Sequence Rank for Battery Check */
-#define BATT_ADC_INSTANCE       ADC1             /**< Shared ADC Peripheral Instance */
+#define PIN_BUZZER_TIMER               TIM3 /**< Buzzer timer instance. */
+#define PIN_BUZZER_CHANNEL             TIM_CHANNEL_4 /**< Buzzer timer output channel. */
+#define PIN_BUZZER_PORT                GPIOB /**< Buzzer GPIO port. */
+#define PIN_BUZZER_PIN                 GPIO_PIN_1 /**< Buzzer GPIO pin. */
+#define PIN_BUZZER_AF                  GPIO_AF2_TIM3 /**< PB1 alternate function: TIM3_CH4. */
 
-/* ===================================================================== *
- * SECTION 9  —  IMU / GYROSCOPE (MPU6500 Fast Mode I2C)
- * ===================================================================== */
+#ifdef __cplusplus
+}
+#endif
 
-#define IMU_SCL_PORT            GPIOB            /**< GPIO Port for I2C Serial Clock */
-#define IMU_SCL_PIN             GPIO_PIN_8       /**< GPIO Pin for I2C Serial Clock */
-#define IMU_SCL_AF              GPIO_AF4_I2C1    /**< Alternate Function mapping to I2C1 */
+#endif /* PINS_H */
 
-#define IMU_SDA_PORT            GPIOB            /**< GPIO Port for I2C Serial Data */
-#define IMU_SDA_PIN             GPIO_PIN_9       /**< GPIO Pin for I2C Serial Data */
-#define IMU_SDA_AF              GPIO_AF4_I2C1    /**< Alternate Function mapping to I2C1 */
-
-#define IMU_I2C_INSTANCE        I2C1             /**< I2C Hardware Instance */
-#define MPU6500_I2C_ADDR_8BIT   (0x68U << 1U)    /**< 8-bit Shifted Format for HAL Drivers */
-
-/* ===================================================================== *
- * SECTION 10 —  DIP SWITCHES (User UI Configuration Inputs)
- * ===================================================================== */
-
-#define DIP1_PORT               GPIOA            /**< GPIO Port for DIP Switch Position 1 */
-#define DIP1_PIN                GPIO_PIN_12      /**< GPIO Pin for DIP Switch Position 1 */
-
-#define DIP2_PORT               GPIOB            /**< GPIO Port for DIP Switch Position 2 */
-#define DIP2_PIN                GPIO_PIN_2       /**< GPIO Pin for DIP Switch Position 2 */
-
-#define DIP3_PORT               GPIOC            /**< GPIO Port for DIP Switch Position 3 */
-#define DIP3_PIN                GPIO_PIN_14      /**< GPIO Pin for DIP Switch Position 3 */
-
-#define DIP4_PORT               GPIOC            /**< GPIO Port for DIP Switch Position 4 (Shared with Onboard LED) */
-#define DIP4_PIN                GPIO_PIN_13      /**< GPIO Pin for DIP Switch Position 4 (Shared with Onboard LED) */
-
-/* ===================================================================== *
- * SECTION 11 —  USER BUTTON
- * ===================================================================== */
-
-#define BTN_PORT                GPIOC            /**< GPIO Port for Onboard Test/User Button */
-#define BTN_PIN                 GPIO_PIN_15      /**< GPIO Pin for Onboard Test/User Button */
-
-/* ===================================================================== *
- * SECTION 12 —  BUZZER
- * ===================================================================== */
-
-#define BUZZER_PORT             GPIOB            /**< GPIO Port for Audio Feedback Node */
-#define BUZZER_PIN              GPIO_PIN_1       /**< GPIO Pin for Audio Feedback Node */
-
-/* ===================================================================== *
- * SECTION 13 —  STATUS LED
- * ===================================================================== */
-
-#define LED_PORT                GPIOC            /**< GPIO Port for Status Indicator LED */
-#define LED_PIN                 GPIO_PIN_13      /**< GPIO Pin for Status Indicator LED */
-
-/* ===================================================================== *
- * SECTION 14 —  RESERVED SYSTEM PINS
- * ===================================================================== */
-
-#define SYS_SWDIO_PORT          GPIOA            /**< Fixed Port for Serial Wire Data Input Output */
-#define SYS_SWDIO_PIN           GPIO_PIN_13      /**< Fixed Pin for Serial Wire Data Input Output */
-
-#define SYS_SWCLK_PORT          GPIOA            /**< Fixed Port for Serial Wire Clock */
-#define SYS_SWCLK_PIN           GPIO_PIN_14      /**< Fixed Pin for Serial Wire Clock */
 
 
 /* ===================================================================== *
@@ -303,8 +243,3 @@ extern "C" {
  * PC15  | BTN         | GPIO IN PU | Pushbutton UI Signal Input line (Active Low)
  * ===================================================================== */
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* PINS_H */
