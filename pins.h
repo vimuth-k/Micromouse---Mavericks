@@ -260,8 +260,6 @@ extern "C" {
 #define SYS_SWCLK_PORT          GPIOA            /**< Fixed Port for Serial Wire Clock */
 #define SYS_SWCLK_PIN           GPIO_PIN_14      /**< Fixed Pin for Serial Wire Clock */
 
-#define SYS_NRST_PORT           NRST_PORT        /**< Fixed Hardware Dedicated Reset Reset line */
-#define SYS_NRST_PIN            NRST_PIN         /**< Fixed Hardware Dedicated Reset Reset pin line */
 
 /* ===================================================================== *
  * SECTION 15 —  COMPLETE PIN CONFLICT MATRIX
