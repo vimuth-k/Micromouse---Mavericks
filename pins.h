@@ -47,8 +47,6 @@ extern "C" {
 #define MOTOR_TIM_INSTANCE      TIM1             /**< Shared Timer peripheral instance */
 #define MOTOR_TIM_PRESCALER     0U               /**< Clock prescaler value */
 #define MOTOR_TIM_PERIOD        4999U            /**< Auto-reload value for 20 kHz frequency */
-#define MOTOR_PWM_MAX           4999U            /**< Maximum saturation limit for PWM duty */
-#define MOTOR_PWM_MIN           0U               /**< Minimum saturation limit for PWM duty */
 /**@}*/
 
 /* ===================================================================== *
@@ -210,7 +208,6 @@ extern "C" {
 #define IMU_SDA_AF              GPIO_AF4_I2C1    /**< Alternate Function mapping to I2C1 */
 
 #define IMU_I2C_INSTANCE        I2C1             /**< I2C Hardware Instance */
-#define MPU6500_I2C_ADDR        0x68U            /**< 7-bit Device Address (AD0 low) */
 #define MPU6500_I2C_ADDR_8BIT   (0x68U << 1U)    /**< 8-bit Shifted Format for HAL Drivers */
 
 /* ===================================================================== *
