@@ -89,6 +89,8 @@ extern "C" {
 #define ENC_L_B_PIN             GPIO_PIN_1       /**< GPIO Pin for Left Encoder Channel B */
 #define ENC_L_B_AF              GPIO_AF1_TIM2    /**< Alternate function mapping to TIM2 */
 #define ENC_L_TIM               TIM2             /**< Timer instance used for Left Encoder */
+#define ENC_L_TIM_CHANNEL_A     TIM_CHANNEL_1
+#define ENC_L_TIM_CHANNEL_B     TIM_CHANNEL_2
 /**@}*/
 
 /** @name Right Encoder Definitions (16-bit Quadrature + Overflow Track) */
@@ -101,6 +103,8 @@ extern "C" {
 #define ENC_R_B_AF              GPIO_AF2_TIM4    /**< Alternate function mapping to TIM4 */
 #define ENC_R_TIM               TIM4             /**< Timer instance used for Right Encoder */
 #define ENC_R_MAX_COUNT         65535U           /**< Maximum counter limit before overflow */
+#define ENC_R_TIM_CHANNEL_A     TIM_CHANNEL_1
+#define ENC_R_TIM_CHANNEL_B     TIM_CHANNEL_2
 /**@}*/
 
 /* ===================================================================== *
