@@ -147,10 +147,10 @@ enum
  */
 typedef struct
 {
-    uint8_t wall_mask; /**< Bitwise OR of known wall sides from WallMask. */
-    uint8_t open_mask; /**< Bitwise OR of observed open sides from WallMask. */
-    uint8_t flood_cost; /**< Flood-fill distance cost. */
-    bool visited; /**< True after the robot has entered this cell. */
+    WallMask wall_mask;
+    WallMask open_mask;
+    uint8_t flood_cost;
+    bool visited;
 } Cell;
 
 /* ========================================================================== */
