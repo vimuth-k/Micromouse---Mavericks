@@ -1,0 +1,236 @@
+bash
+
+cat << 'EOF'
+Planning config.h structure:
+
+WHEEL GEOMETRY
+  - Diameter: 34mm
+  - Circumference: π × 34
+  - Axle spacing: measured (need nominal + note to measure)
+  - Tyre compression factor
+
+ENCODER CONSTANTS
+  - PPR: 7 (before gearbox)
+  - Gear ratio: 30:1
+  - Quadrature multiplier: 4
+  - Counts per wheel rev: 7 × 4 × 30 = 840
+  - mm per count: π × 34 / 840 = 0.12723...
+  - Max encoder count rate at max speed
+
+MAZE CONSTANTS (MicroMaze 3 spec)
+  - Grid: 16×16
+  - Cell width: 180mm
+  - Wall height: 50mm
+  - Wall thickness: 12mm
+  - Half cell: 90mm
+  - Goal cells: [7,7] to [8,8]
+  - Start cell: [15,0] facing North
+
+MOTOR PARAMETERS
+  - Rated voltage: 6V
+  - No-load speed: 750 RPM → at wheel: 750/30 = 25 RPM → 25/60 × π×34 = 44.5 mm/s? No.
+    Wait: 750 RPM at motor shaft. After 30:1 gearbox: 750/30 = 25 RPM at wheel.
+    Wheel circumference: π × 34mm = 106.81mm
+    Speed at 25 RPM: 25 × 106.81 / 60 = 44.5 mm/s? That seems very slow.
+    
+    Let me recalculate: 750 RPM motor, 30:1 gearbox
+    Wheel RPM = 750/30 = 25 RPM
+    Wheel speed = 25 rev/min × π×0.034m × 1min/60s
+    = 25 × 0.10681 / 60
+    = 0.04450 m/s = 44.5 mm/s
+    
+    That's very slow for a micromouse. Let me check: 6V 750RPM with 30:1 gearbox.
+    Actually 750RPM might be the OUTPUT shaft speed (after gearbox).
+    In that case:
+    Wheel speed = 750 × π × 34mm / 60 = 750 × 106.81 / 60 = 1335 mm/s ≈ 1.3 m/s
+    
+    The spec says "6V 750RPM motors with encoders" — for N20 style motors used in micromouse,
+    750RPM is typically the OUTPUT SHAFT (after gearbox). The gearbox is internal.
+    Encoder PPR = 7 on the MOTOR shaft (before gearbox).
+    
+    So: output 750 RPM → wheel speed = 750/60 × π×34 = 12.5 × 106.81 = 1335 mm/s max
+    Counts per wheel rev = 7 × 4 × 30 = 840 (encoder on motor shaft × quadrature × gear)
+    mm per count = π × 34 / 840 = 0.12723 mm
+    
+    Verify: at 750 RPM output, counts/sec = 750/60 × 840 = 10,500 counts/sec
+    speed = 10500 × 0.12723 = 1335 mm/s ✓ consistent
+
+MOTOR PARAMETERS
+  - Nominal voltage: 6V
+  - No-load output speed: 750 RPM (at gearbox output)
+  - Stall current: ~0.6A (typical N20)
+  - PWM frequency: 20kHz
+  - PWM max: 4999 (from TIM1 ARR)
+  - PWM feed-forward: estimate PWM per mm/s
+
+SPEED PROFILES
+  - Search: 200 mm/s (safe exploration)
+  - Return: 250 mm/s
+  - Run 1: 400 mm/s
+  - Run 2: 600 mm/s
+  - Run 3: 750 mm/s
+  - Max theoretical: ~1335 mm/s (100% PWM)
+
+PID DEFAULTS (per 1ms tick)
+  Speed: Kp=4.5, Ki=9.0, Kd=0.05
+  Straight: Kp=2.5, Ki=0.0, Kd=0.4
+  Heading: Kp=1.8, Ki=0.0, Kd=0.1
+  Turn: Kp=12.0, Ki=0.0, Kd=0.3
+  Wall: Kp=0.35 (P only)
+
+IR THRESHOLDS
+  - Per sensor pair, needs to be filled after calibration
+  - Provide defaults with clear "calibrate before use" note
+
+IMU - MPU6500
+  - I2C address: 0x68 (AD0 = GND)
+  - Gyro range: ±500 dps → sensitivity 65.5 LSB/dps
+  - Accel range: ±4g → sensitivity 8192 LSB/g
+  - Sample rate: 1kHz
+  - DLPF bandwidth: 92 Hz
+  - Calibration samples: 500
+
+BATTERY
+  - Nominal: 7.4V (2S Li-ion)
+  - Full: 8.4V
+  - Low: 7.0V
+  - Critical: 6.6V
+  - ADC: 12-bit, 3.3V ref, 2:1 divider
+
+FLASH
+  - STM32F411: 512KB, sector 7 = 0x08060000, 128KB
+  - Magic number for validity check
+
+OLED
+  - I2C addr: 0x3C
+  - Enable flag
+
+ACCELERATION
+  - Normal accel: 3000 mm/s²
+  - Normal decel: 4000 mm/s²
+  - Search accel: 2000 mm/s²
+  - Turn speed: 180 mm/s (outer wheel)
+  - Turn tolerance: 0.8°
+
+All constants must be derived at compile time using #define arithmetic.
+Use float literals with 'f' suffix throughout.
+Group with clear section headers.
+Add compile-time assertions where possible (C11 _Static_assert).
+EOF
+Output
+
+Planning config.h structure:
+
+WHEEL GEOMETRY
+  - Diameter: 34mm
+  - Circumference: π × 34
+  - Axle spacing: measured (need nominal + note to measure)
+  - Tyre compression factor
+
+ENCODER CONSTANTS
+  - PPR: 7 (before gearbox)
+  - Gear ratio: 30:1
+  - Quadrature multiplier: 4
+  - Counts per wheel rev: 7 × 4 × 30 = 840
+  - mm per count: π × 34 / 840 = 0.12723...
+  - Max encoder count rate at max speed
+
+MAZE CONSTANTS (MicroMaze 3 spec)
+  - Grid: 16×16
+  - Cell width: 180mm
+  - Wall height: 50mm
+  - Wall thickness: 12mm
+  - Half cell: 90mm
+  - Goal cells: [7,7] to [8,8]
+  - Start cell: [15,0] facing North
+
+MOTOR PARAMETERS
+  - Rated voltage: 6V
+  - No-load speed: 750 RPM → at wheel: 750/30 = 25 RPM → 25/60 × π×34 = 44.5 mm/s? No.
+    Wait: 750 RPM at motor shaft. After 30:1 gearbox: 750/30 = 25 RPM at wheel.
+    Wheel circumference: π × 34mm = 106.81mm
+    Speed at 25 RPM: 25 × 106.81 / 60 = 44.5 mm/s? That seems very slow.
+    
+    Let me recalculate: 750 RPM motor, 30:1 gearbox
+    Wheel RPM = 750/30 = 25 RPM
+    Wheel speed = 25 rev/min × π×0.034m × 1min/60s
+    = 25 × 0.10681 / 60
+    = 0.04450 m/s = 44.5 mm/s
+    
+    That's very slow for a micromouse. Let me check: 6V 750RPM with 30:1 gearbox.
+    Actually 750RPM might be the OUTPUT shaft speed (after gearbox).
+    In that case:
+    Wheel speed = 750 × π × 34mm / 60 = 750 × 106.81 / 60 = 1335 mm/s ≈ 1.3 m/s
+    
+    The spec says "6V 750RPM motors with encoders" — for N20 style motors used in micromouse,
+    750RPM is typically the OUTPUT SHAFT (after gearbox). The gearbox is internal.
+    Encoder PPR = 7 on the MOTOR shaft (before gearbox).
+    
+    So: output 750 RPM → wheel speed = 750/60 × π×34 = 12.5 × 106.81 = 1335 mm/s max
+    Counts per wheel rev = 7 × 4 × 30 = 840 (encoder on motor shaft × quadrature × gear)
+    mm per count = π × 34 / 840 = 0.12723 mm
+    
+    Verify: at 750 RPM output, counts/sec = 750/60 × 840 = 10,500 counts/sec
+    speed = 10500 × 0.12723 = 1335 mm/s ✓ consistent
+
+MOTOR PARAMETERS
+  - Nominal voltage: 6V
+  - No-load output speed: 750 RPM (at gearbox output)
+  - Stall current: ~0.6A (typical N20)
+  - PWM frequency: 20kHz
+  - PWM max: 4999 (from TIM1 ARR)
+  - PWM feed-forward: estimate PWM per mm/s
+
+SPEED PROFILES
+  - Search: 200 mm/s (safe exploration)
+  - Return: 250 mm/s
+  - Run 1: 400 mm/s
+  - Run 2: 600 mm/s
+  - Run 3: 750 mm/s
+  - Max theoretical: ~1335 mm/s (100% PWM)
+
+PID DEFAULTS (per 1ms tick)
+  Speed: Kp=4.5, Ki=9.0, Kd=0.05
+  Straight: Kp=2.5, Ki=0.0, Kd=0.4
+  Heading: Kp=1.8, Ki=0.0, Kd=0.1
+  Turn: Kp=12.0, Ki=0.0, Kd=0.3
+  Wall: Kp=0.35 (P only)
+
+IR THRESHOLDS
+  - Per sensor pair, needs to be filled after calibration
+  - Provide defaults with clear "calibrate before use" note
+
+IMU - MPU6500
+  - I2C address: 0x68 (AD0 = GND)
+  - Gyro range: ±500 dps → sensitivity 65.5 LSB/dps
+  - Accel range: ±4g → sensitivity 8192 LSB/g
+  - Sample rate: 1kHz
+  - DLPF bandwidth: 92 Hz
+  - Calibration samples: 500
+
+BATTERY
+  - Nominal: 7.4V (2S Li-ion)
+  - Full: 8.4V
+  - Low: 7.0V
+  - Critical: 6.6V
+  - ADC: 12-bit, 3.3V ref, 2:1 divider
+
+FLASH
+  - STM32F411: 512KB, sector 7 = 0x08060000, 128KB
+  - Magic number for validity check
+
+OLED
+  - I2C addr: 0x3C
+  - Enable flag
+
+ACCELERATION
+  - Normal accel: 3000 mm/s²
+  - Normal decel: 4000 mm/s²
+  - Search accel: 2000 mm/s²
+  - Turn speed: 180 mm/s (outer wheel)
+  - Turn tolerance: 0.8°
+
+All constants must be derived at compile time using #define arithmetic.
+Use float literals with 'f' suffix throughout.
+Group with clear section headers.
+Add compile-time assertions where possible (C11 _Static_assert).
