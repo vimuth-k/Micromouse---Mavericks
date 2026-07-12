@@ -1,175 +1,636 @@
+/**
+ * @file    pins.h
+ * @brief   MicroMaze 3  ·  STM32F411CEU6 Black Pill  ·  Pin Definitions
+ *
+ * Single source of truth for every hardware connection.
+ * ─────────────────────────────────────────────────────────────────────
+ * RULES:
+ *   • One physical pin  → one PORT macro + one PIN macro.
+ *   • No HAL_xxx() calls, no peripheral init, no structs.
+ *   • All timer/ADC channel numbers derived from the same pin macros.
+ *   • Every group is conflict-checked and CubeMX-compatible.
+ *   • Helper macros (SET/RESET/TOGGLE/READ) follow each GPIO group.
+ * ─────────────────────────────────────────────────────────────────────
+ * PERIPHERAL SUMMARY
+ * ─────────────────────────────────────────────────────────────────────
+ *  Peripheral   Timer/Bus   Pins
+ *  ──────────── ─────────── ─────────────────────────────────────────
+ *  Left  motor  TIM1_CH1    PA8   (PWM)
+ *  Right motor  TIM1_CH2    PA9   (PWM)
+ *  Left  enc    TIM2        PA0 / PA1  (CH1 / CH2, 32-bit)
+ *  Right enc    TIM4        PB6 / PB7  (CH1 / CH2, 16-bit + OVF ISR)
+ *  Control loop TIM5        (1 kHz interrupt, no pin)
+ *  IR receivers ADC1 DMA    PA2–PA7, PB0  (7-channel scan, ranks 1–7)
+ *  IMU MPU6500  I2C1        PB8 (SCL) / PB9 (SDA)
+ *  IR emitters  GPIO OUT    6 independent: PA10,PA11,PA15,PB3,PB4,PB5
+ *  Motor dir    GPIO OUT    PB12,PB13 (left) / PB14,PB15 (right)
+ *  Motor STBY   GPIO OUT    PB10
+ *  DIP switches GPIO IN PU  PA12, PB2, PC14, PC13
+ *  Test button  GPIO IN PU  PC15
+ *  Buzzer       GPIO OUT    PB1
+ * ─────────────────────────────────────────────────────────────────────
+ */
+
 #ifndef PINS_H
 #define PINS_H
 
-/*
- * ================================================================
- *  MICROMOUSE  ·  STM32F411CEU6 Black Pill  ·  PINS.H
- *  Single source of truth for every GPIO / peripheral pin.
- *  Change pin numbers HERE only — all other files use these macros.
- * ================================================================
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "stm32f4xx_hal.h"   /* GPIO_PIN_x, GPIOx, needed for helper macros */
+
+/* ===================================================================== *
+ *  SECTION 1  —  MOTOR PWM  (TIM1, APB2 = 100 MHz)
  *
- *  COMPONENTS
- *  ─────────────────────────────────────────────────────────────
- *  Motors  : 2× 6V 750RPM DC with quadrature encoders
- *  Driver  : TB6612FNG  (dual H-bridge)
- *  IMU     : MPU6500    (SPI2)
- *  IR emit : 6× SFH4545 via AO3400A N-MOSFET gates
- *  IR recv : 6× TEFT4300 phototransistors → ADC1 DMA scan
- *  Display : SSD1306 128×64 OLED (I2C1, optional)
- *  DIP SW  : 4-position
- *  Wheel   : 34 mm diameter rubber
- * ================================================================
+ *  CubeMX:  TIM1 → PWM Generation CH1 + CH2
+ *           Prescaler = 0,  ARR = 4999  → 20 kHz
+ *           CH1 Mode = PWM1, CH2 Mode = PWM1, Preload ENABLE
+ *           PA8 alternate function AF01 (TIM1_CH1)
+ *           PA9 alternate function AF01 (TIM1_CH2)
+ * ===================================================================== */
+
+/** Left motor PWM — PA8 — TIM1_CH1 */
+#define MOTOR_L_PWM_PORT        GPIOA
+#define MOTOR_L_PWM_PIN         GPIO_PIN_8
+#define MOTOR_L_PWM_AF          GPIO_AF1_TIM1
+#define MOTOR_L_TIM             TIM1
+#define MOTOR_L_TIM_CHANNEL     TIM_CHANNEL_1
+#define MOTOR_L_CCR             (TIM1->CCR1)   /**< direct CCR write     */
+
+/** Right motor PWM — PA9 — TIM1_CH2 */
+#define MOTOR_R_PWM_PORT        GPIOA
+#define MOTOR_R_PWM_PIN         GPIO_PIN_9
+#define MOTOR_R_PWM_AF          GPIO_AF1_TIM1
+#define MOTOR_R_TIM             TIM1
+#define MOTOR_R_TIM_CHANNEL     TIM_CHANNEL_2
+#define MOTOR_R_CCR             (TIM1->CCR2)   /**< direct CCR write     */
+
+/** PWM timer shared settings */
+#define MOTOR_TIM_INSTANCE      TIM1
+#define MOTOR_TIM_PRESCALER     0U
+#define MOTOR_TIM_PERIOD        4999U          /**< 100 MHz / 5000 = 20 kHz */
+#define MOTOR_PWM_MAX           4999U
+#define MOTOR_PWM_MIN           0U
+
+/* ===================================================================== *
+ *  SECTION 2  —  MOTOR DIRECTION  (TB6612FNG, GPIO OUT, no pull)
  *
- *  CONFLICT RESOLUTION NOTES
- *  ─────────────────────────────────────────────────────────────
- *  PA9  = TIM1_CH2 (PWMB)  conflicts with USART1_TX
- *      → Use USB CDC for UART debug (no pin needed)
- *  PA5  = SPI1_SCK          conflicts with ADC1_IN5
- *      → Use SPI2 for MPU6500 (PB10/PC2/PC3)
- *  PA0  = TIM2_CH1 encoder  conflicts with WKUP button
- *      → Leave PA0 as encoder; use PB5 as run button
- * ================================================================
+ *  Truth table (per channel):
+ *    xIN1 H, xIN2 L, PWM > 0  →  Forward
+ *    xIN1 L, xIN2 H, PWM > 0  →  Reverse
+ *    xIN1 H, xIN2 H,  any     →  Brake  (short-circuit stop)
+ *    xIN1 L, xIN2 L,  any     →  Coast  (free-wheel)
+ *
+ *  CubeMX: PB12,PB13,PB14,PB15 → GPIO Output, No pull, Push-pull, Low speed
+ * ===================================================================== */
+
+/** Left motor direction bit 1 — PB12 — AIN1 */
+#define MOTOR_L_IN1_PORT        GPIOB
+#define MOTOR_L_IN1_PIN         GPIO_PIN_12
+
+/** Left motor direction bit 2 — PB13 — AIN2 */
+#define MOTOR_L_IN2_PORT        GPIOB
+#define MOTOR_L_IN2_PIN         GPIO_PIN_13
+
+/** Right motor direction bit 1 — PB14 — BIN1 */
+#define MOTOR_R_IN1_PORT        GPIOB
+#define MOTOR_R_IN1_PIN         GPIO_PIN_14
+
+/** Right motor direction bit 2 — PB15 — BIN2 */
+#define MOTOR_R_IN2_PORT        GPIOB
+#define MOTOR_R_IN2_PIN         GPIO_PIN_15
+
+/**
+ * Motor direction helper macros.
+ * Apply to BOTH left/right in sequence to set direction.
  */
+#define MOTOR_L_FORWARD()  do {                                              \
+    HAL_GPIO_WritePin(MOTOR_L_IN1_PORT, MOTOR_L_IN1_PIN, GPIO_PIN_SET);     \
+    HAL_GPIO_WritePin(MOTOR_L_IN2_PORT, MOTOR_L_IN2_PIN, GPIO_PIN_RESET);   \
+} while(0)
 
-#include "stm32f4xx_hal.h"
+#define MOTOR_L_REVERSE()  do {                                              \
+    HAL_GPIO_WritePin(MOTOR_L_IN1_PORT, MOTOR_L_IN1_PIN, GPIO_PIN_RESET);   \
+    HAL_GPIO_WritePin(MOTOR_L_IN2_PORT, MOTOR_L_IN2_PIN, GPIO_PIN_SET);     \
+} while(0)
 
-/* ── MOTOR PWM  (TIM1, APB2, 100 MHz) ──────────────────────────────── */
-/* Left  motor speed  → TIM1 CH1 */
-#define PIN_PWMA_PORT           GPIOA
-#define PIN_PWMA_PIN            GPIO_PIN_8      /* PA8  TIM1_CH1          */
-/* Right motor speed  → TIM1 CH2 */
-#define PIN_PWMB_PORT           GPIOA
-#define PIN_PWMB_PIN            GPIO_PIN_9      /* PA9  TIM1_CH2          */
+#define MOTOR_L_BRAKE()    do {                                              \
+    HAL_GPIO_WritePin(MOTOR_L_IN1_PORT, MOTOR_L_IN1_PIN, GPIO_PIN_SET);     \
+    HAL_GPIO_WritePin(MOTOR_L_IN2_PORT, MOTOR_L_IN2_PIN, GPIO_PIN_SET);     \
+} while(0)
 
-/* ── TB6612FNG DIRECTION PINS ───────────────────────────────────────── */
-/* Left motor (Channel A of TB6612) */
-#define PIN_AIN1_PORT           GPIOB
-#define PIN_AIN1_PIN            GPIO_PIN_2      /* PB2  GPIO OUT          */
-#define PIN_AIN2_PORT           GPIOB
-#define PIN_AIN2_PIN            GPIO_PIN_3      /* PB3  GPIO OUT          */
-/* Right motor (Channel B of TB6612) */
-#define PIN_BIN1_PORT           GPIOB
-#define PIN_BIN1_PIN            GPIO_PIN_12     /* PB12 GPIO OUT          */
-#define PIN_BIN2_PORT           GPIOB
-#define PIN_BIN2_PIN            GPIO_PIN_11     /* PB11 GPIO OUT          */
-/* Standby pin (shared, active HIGH) */
-#define PIN_STBY_PORT           GPIOB
-#define PIN_STBY_PIN            GPIO_PIN_1      /* PB1  GPIO OUT          */
+#define MOTOR_L_COAST()    do {                                              \
+    HAL_GPIO_WritePin(MOTOR_L_IN1_PORT, MOTOR_L_IN1_PIN, GPIO_PIN_RESET);   \
+    HAL_GPIO_WritePin(MOTOR_L_IN2_PORT, MOTOR_L_IN2_PIN, GPIO_PIN_RESET);   \
+} while(0)
 
-/* ── ENCODERS ───────────────────────────────────────────────────────── */
-/* Left encoder   → TIM2 (32-bit) encoder mode */
-#define PIN_ENC_LA_PORT         GPIOA
-#define PIN_ENC_LA_PIN          GPIO_PIN_0      /* PA0  TIM2_CH1          */
-#define PIN_ENC_LB_PORT         GPIOA
-#define PIN_ENC_LB_PIN          GPIO_PIN_1      /* PA1  TIM2_CH2          */
-/* Right encoder  → TIM4 (16-bit) encoder mode */
-#define PIN_ENC_RA_PORT         GPIOB
-#define PIN_ENC_RA_PIN          GPIO_PIN_6      /* PB6  TIM4_CH1          */
-#define PIN_ENC_RB_PORT         GPIOB
-#define PIN_ENC_RB_PIN          GPIO_PIN_7      /* PB7  TIM4_CH2          */
+#define MOTOR_R_FORWARD()  do {                                              \
+    HAL_GPIO_WritePin(MOTOR_R_IN1_PORT, MOTOR_R_IN1_PIN, GPIO_PIN_SET);     \
+    HAL_GPIO_WritePin(MOTOR_R_IN2_PORT, MOTOR_R_IN2_PIN, GPIO_PIN_RESET);   \
+} while(0)
 
-/* ── IR EMITTERS  (AO3400A MOSFET gate, 1 pin fires ALL 6 emitters) ── */
-/* All 6 SFH4545 emitters are connected to MOSFETs driven from PB0.    */
-/* Each MOSFET gate has a 100Ω series resistor.                         */
-/* Each SFH4545 has a series resistor to limit peak current to ~80mA.  */
-#define PIN_IR_EMIT_PORT        GPIOB
-#define PIN_IR_EMIT_PIN         GPIO_PIN_0      /* PB0  GPIO OUT          */
+#define MOTOR_R_REVERSE()  do {                                              \
+    HAL_GPIO_WritePin(MOTOR_R_IN1_PORT, MOTOR_R_IN1_PIN, GPIO_PIN_RESET);   \
+    HAL_GPIO_WritePin(MOTOR_R_IN2_PORT, MOTOR_R_IN2_PIN, GPIO_PIN_SET);     \
+} while(0)
 
-/* ── IR RECEIVERS  (ADC1, 6-channel DMA circular scan) ─────────────── */
-/* Receivers: TEFT4300 collector → 10kΩ pull-up to 3.3V → ADC pin     */
-/* Rank order in CubeMX must match these indices exactly:               */
-/*  Rank 1 → SENS_FL (front-left  diagonal)  PA2  ADC1_IN2             */
-/*  Rank 2 → SENS_FR (front-right diagonal)  PA3  ADC1_IN3             */
-/*  Rank 3 → SENS_L  (left side)             PA4  ADC1_IN4             */
-/*  Rank 4 → SENS_R  (right side)            PA5  ADC1_IN5             */
-/*  Rank 5 → SENS_DL (diagonal left)         PA6  ADC1_IN6             */
-/*  Rank 6 → SENS_DR (diagonal right)        PA7  ADC1_IN7             */
-#define PIN_ADC_FL_PORT         GPIOA
-#define PIN_ADC_FL_PIN          GPIO_PIN_2      /* PA2  ADC1_IN2          */
-#define PIN_ADC_FR_PORT         GPIOA
-#define PIN_ADC_FR_PIN          GPIO_PIN_3      /* PA3  ADC1_IN3          */
-#define PIN_ADC_L_PORT          GPIOA
-#define PIN_ADC_L_PIN           GPIO_PIN_4      /* PA4  ADC1_IN4          */
-#define PIN_ADC_R_PORT          GPIOA
-#define PIN_ADC_R_PIN           GPIO_PIN_5      /* PA5  ADC1_IN5          */
-#define PIN_ADC_DL_PORT         GPIOA
-#define PIN_ADC_DL_PIN          GPIO_PIN_6      /* PA6  ADC1_IN6          */
-#define PIN_ADC_DR_PORT         GPIOA
-#define PIN_ADC_DR_PIN          GPIO_PIN_7      /* PA7  ADC1_IN7          */
+#define MOTOR_R_BRAKE()    do {                                              \
+    HAL_GPIO_WritePin(MOTOR_R_IN1_PORT, MOTOR_R_IN1_PIN, GPIO_PIN_SET);     \
+    HAL_GPIO_WritePin(MOTOR_R_IN2_PORT, MOTOR_R_IN2_PIN, GPIO_PIN_SET);     \
+} while(0)
 
-/* ── MPU6500 IMU  (SPI2) ────────────────────────────────────────────── */
-#define PIN_SPI2_SCK_PORT       GPIOB
-#define PIN_SPI2_SCK_PIN        GPIO_PIN_10     /* PB10 SPI2_SCK          */
-#define PIN_SPI2_MISO_PORT      GPIOC
-#define PIN_SPI2_MISO_PIN       GPIO_PIN_2      /* PC2  SPI2_MISO         */
-#define PIN_SPI2_MOSI_PORT      GPIOC
-#define PIN_SPI2_MOSI_PIN       GPIO_PIN_3      /* PC3  SPI2_MOSI         */
-#define PIN_MPU_CS_PORT         GPIOA
-#define PIN_MPU_CS_PIN          GPIO_PIN_10     /* PA10 GPIO OUT CS       */
+#define MOTOR_R_COAST()    do {                                              \
+    HAL_GPIO_WritePin(MOTOR_R_IN1_PORT, MOTOR_R_IN1_PIN, GPIO_PIN_RESET);   \
+    HAL_GPIO_WritePin(MOTOR_R_IN2_PORT, MOTOR_R_IN2_PIN, GPIO_PIN_RESET);   \
+} while(0)
 
-/* ── OLED SSD1306  (I2C1) ───────────────────────────────────────────── */
-#define PIN_I2C1_SCL_PORT       GPIOB
-#define PIN_I2C1_SCL_PIN        GPIO_PIN_8      /* PB8  I2C1_SCL          */
-#define PIN_I2C1_SDA_PORT       GPIOB
-#define PIN_I2C1_SDA_PIN        GPIO_PIN_9      /* PB9  I2C1_SDA          */
+/* ===================================================================== *
+ *  SECTION 3  —  MOTOR STANDBY  (TB6612FNG STBY, active HIGH)
+ *
+ *  HIGH = driver enabled (normal operation)
+ *  LOW  = standby        (outputs Hi-Z, power-save)
+ *
+ *  CubeMX: PB10 → GPIO Output, No pull, Push-pull, Low speed
+ * ===================================================================== */
 
-/* ── DIP SWITCHES  (active LOW, internal pull-up) ───────────────────── */
-#define PIN_SW0_PORT            GPIOC
-#define PIN_SW0_PIN             GPIO_PIN_14     /* PC14 GPIO IN           */
-#define PIN_SW1_PORT            GPIOA
-#define PIN_SW1_PIN             GPIO_PIN_15     /* PA15 GPIO IN           */
-#define PIN_SW2_PORT            GPIOB
-#define PIN_SW2_PIN             GPIO_PIN_4      /* PB4  GPIO IN           */
-#define PIN_SW3_PORT            GPIOB
-#define PIN_SW3_PIN             GPIO_PIN_5      /* PB5  GPIO IN  ← SW3   */
+#define MOTOR_STBY_PORT         GPIOB
+#define MOTOR_STBY_PIN          GPIO_PIN_10
 
-/* ── RUN BUTTON  (active LOW, internal pull-up) ─────────────────────── */
-/* Separate from DIP switches. Press to trigger a run. */
-#define PIN_BTN_PORT            GPIOC
-#define PIN_BTN_PIN             GPIO_PIN_15     /* PC15 GPIO IN           */
+#define MOTOR_ENABLE()   HAL_GPIO_WritePin(MOTOR_STBY_PORT, MOTOR_STBY_PIN, GPIO_PIN_SET)
+#define MOTOR_DISABLE()  HAL_GPIO_WritePin(MOTOR_STBY_PORT, MOTOR_STBY_PIN, GPIO_PIN_RESET)
+#define MOTOR_STBY_READ() (HAL_GPIO_ReadPin(MOTOR_STBY_PORT, MOTOR_STBY_PIN) == GPIO_PIN_SET)
 
-/* ── STATUS LED  (onboard Black Pill LED, active LOW) ───────────────── */
-#define PIN_LED_PORT            GPIOC
-#define PIN_LED_PIN             GPIO_PIN_13     /* PC13 GPIO OUT          */
+/* ===================================================================== *
+ *  SECTION 4  —  ENCODERS
+ *
+ *  LEFT encoder  → TIM2 (32-bit, PA0/PA1)
+ *    CubeMX: TIM2 → Combined Channels: Encoder Mode
+ *            Encoder Mode: TI1 and TI2
+ *            Counter Period: 4294967295 (0xFFFF FFFF)
+ *            Auto-Reload Preload: ENABLE
+ *            CH1 Input: Direct (TI1),  PA0, AF01
+ *            CH2 Input: Direct (TI2),  PA1, AF01
+ *
+ *  RIGHT encoder → TIM4 (16-bit, PB6/PB7)
+ *    CubeMX: TIM4 → Combined Channels: Encoder Mode
+ *            Encoder Mode: TI1 and TI2
+ *            Counter Period: 65535 (0xFFFF)
+ *            NVIC: TIM4 global interrupt ENABLED  ← for overflow tracking
+ *            CH1 Input: Direct (TI1),  PB6, AF02
+ *            CH2 Input: Direct (TI2),  PB7, AF02
+ *
+ *  NOTE: TIM4 is 16-bit. Track overflows in TIM4 IRQ to get 32-bit range.
+ * ===================================================================== */
 
-/* ── BUZZER  (active HIGH, via NPN transistor or MOSFET) ────────────── */
-#define PIN_BUZZER_PORT         GPIOB
-#define PIN_BUZZER_PIN          GPIO_PIN_13     /* PB13 GPIO OUT          */
+/** Left encoder A — PA0 — TIM2_CH1 */
+#define ENC_L_A_PORT            GPIOA
+#define ENC_L_A_PIN             GPIO_PIN_0
+#define ENC_L_A_AF              GPIO_AF1_TIM2
 
-/* ── BATTERY ADC  (voltage divider: Vbat÷3 → ADC) ─────────────────── */
-/* Use a 2:1 voltage divider (2× 10kΩ): Vbat/2 → PB0 */
-/* PB0 is already used for IR_EMIT — move BATT_ADC to PC0 instead       */
-#define PIN_BATT_ADC_PORT       GPIOC
-#define PIN_BATT_ADC_PIN        GPIO_PIN_0      /* PC0  ADC1_IN10 (alt)   */
-/* NOTE: Add this as Rank 7 in the ADC DMA scan, or use ADC2 separately */
+/** Left encoder B — PA1 — TIM2_CH2 */
+#define ENC_L_B_PORT            GPIOA
+#define ENC_L_B_PIN             GPIO_PIN_1
+#define ENC_L_B_AF              GPIO_AF1_TIM2
 
-/* ── CONVENIENCE MACROS ─────────────────────────────────────────────── */
-#define LED_ON()        HAL_GPIO_WritePin(PIN_LED_PORT,    PIN_LED_PIN,    GPIO_PIN_RESET)
-#define LED_OFF()       HAL_GPIO_WritePin(PIN_LED_PORT,    PIN_LED_PIN,    GPIO_PIN_SET)
-#define LED_TOGGLE()    HAL_GPIO_TogglePin(PIN_LED_PORT,   PIN_LED_PIN)
+/** Left encoder timer */
+#define ENC_L_TIM               TIM2
+#define ENC_L_TIM_INSTANCE      TIM2        /**< for htim2 init          */
+#define ENC_L_CNT               (TIM2->CNT) /**< direct 32-bit read      */
 
-#define IR_EMIT_ON()    HAL_GPIO_WritePin(PIN_IR_EMIT_PORT, PIN_IR_EMIT_PIN, GPIO_PIN_SET)
-#define IR_EMIT_OFF()   HAL_GPIO_WritePin(PIN_IR_EMIT_PORT, PIN_IR_EMIT_PIN, GPIO_PIN_RESET)
+/** Right encoder A — PB6 — TIM4_CH1 */
+#define ENC_R_A_PORT            GPIOB
+#define ENC_R_A_PIN             GPIO_PIN_6
+#define ENC_R_A_AF              GPIO_AF2_TIM4
 
-#define MPU_CS_LOW()    HAL_GPIO_WritePin(PIN_MPU_CS_PORT,  PIN_MPU_CS_PIN, GPIO_PIN_RESET)
-#define MPU_CS_HIGH()   HAL_GPIO_WritePin(PIN_MPU_CS_PORT,  PIN_MPU_CS_PIN, GPIO_PIN_SET)
+/** Right encoder B — PB7 — TIM4_CH2 */
+#define ENC_R_B_PORT            GPIOB
+#define ENC_R_B_PIN             GPIO_PIN_7
+#define ENC_R_B_AF              GPIO_AF2_TIM4
 
-#define MOTOR_ENABLE()  HAL_GPIO_WritePin(PIN_STBY_PORT, PIN_STBY_PIN, GPIO_PIN_SET)
-#define MOTOR_DISABLE() HAL_GPIO_WritePin(PIN_STBY_PORT, PIN_STBY_PIN, GPIO_PIN_RESET)
+/** Right encoder timer (16-bit — extend with overflow counter in ISR) */
+#define ENC_R_TIM               TIM4
+#define ENC_R_TIM_INSTANCE      TIM4
+#define ENC_R_CNT               ((uint16_t)(TIM4->CNT))
+#define ENC_R_MAX_COUNT         65535U
 
-#define BUZZER_ON()     HAL_GPIO_WritePin(PIN_BUZZER_PORT, PIN_BUZZER_PIN, GPIO_PIN_SET)
-#define BUZZER_OFF()    HAL_GPIO_WritePin(PIN_BUZZER_PORT, PIN_BUZZER_PIN, GPIO_PIN_RESET)
+/** Reset both encoder counters to 0 */
+#define ENC_RESET_ALL()  do { TIM2->CNT = 0U; TIM4->CNT = 0U; } while(0)
+#define ENC_RESET_LEFT() do { TIM2->CNT = 0U; } while(0)
+#define ENC_RESET_RIGHT()do { TIM4->CNT = 0U; } while(0)
 
-#define BTN_PRESSED()   (HAL_GPIO_ReadPin(PIN_BTN_PORT, PIN_BTN_PIN) == GPIO_PIN_RESET)
+/* ===================================================================== *
+ *  SECTION 5  —  CONTROL LOOP TIMER  (TIM5, no physical pin)
+ *
+ *  CubeMX: TIM5 → Timer Interrupt
+ *          Prescaler  = 99        → 100 MHz / 100 = 1 MHz tick
+ *          Period     = 999       → 1 MHz  / 1000 = 1 kHz interrupt
+ *          Auto-Reload Preload: ENABLE
+ *          NVIC: TIM5 global interrupt ENABLED, priority = 1
+ * ===================================================================== */
 
-static inline uint8_t READ_DIP_SWITCHES(void)
+#define CTRL_TIM_INSTANCE       TIM5
+#define CTRL_TIM_PRESCALER      99U     /**< 100 MHz / (99+1) = 1 MHz   */
+#define CTRL_TIM_PERIOD         999U    /**< 1 MHz  / (999+1) = 1 kHz   */
+#define CTRL_TIM_PRIORITY       1U      /**< NVIC preemption priority    */
+
+/* ===================================================================== *
+ *  SECTION 6  —  IR EMITTERS  (6 independent AO3400A MOSFET gates)
+ *
+ *  Each emitter group is controlled by a separate GPIO pin so that
+ *  individual sensor pairs can be fired independently, eliminating
+ *  cross-talk between adjacent pairs.
+ *
+ *  All 6 pins: GPIO Output, No pull, Push-pull, Low speed
+ *  Active HIGH (MOSFET gate pulled HIGH → MOSFET conducts → LED lights)
+ *
+ *  CubeMX: Configure as GPIO_Output for each pin below.
+ *          NOTE: PA15 defaults to JTDI — must disable JTAG in CubeMX
+ *                (System Core → SYS → Debug → Serial Wire only).
+ *                PA15 then becomes free GPIO.
+ *          NOTE: PB3 defaults to JTDO — same fix as PA15.
+ * ===================================================================== */
+
+/** Right Angle IR emitter — PA10 */
+#define IR_EMIT_R_ANGLE_PORT    GPIOA
+#define IR_EMIT_R_ANGLE_PIN     GPIO_PIN_10
+#define IR_EMIT_R_ANGLE_ON()    HAL_GPIO_WritePin(IR_EMIT_R_ANGLE_PORT, IR_EMIT_R_ANGLE_PIN, GPIO_PIN_SET)
+#define IR_EMIT_R_ANGLE_OFF()   HAL_GPIO_WritePin(IR_EMIT_R_ANGLE_PORT, IR_EMIT_R_ANGLE_PIN, GPIO_PIN_RESET)
+
+/** Left Angle IR emitter — PA11 */
+#define IR_EMIT_L_ANGLE_PORT    GPIOA
+#define IR_EMIT_L_ANGLE_PIN     GPIO_PIN_11
+#define IR_EMIT_L_ANGLE_ON()    HAL_GPIO_WritePin(IR_EMIT_L_ANGLE_PORT, IR_EMIT_L_ANGLE_PIN, GPIO_PIN_SET)
+#define IR_EMIT_L_ANGLE_OFF()   HAL_GPIO_WritePin(IR_EMIT_L_ANGLE_PORT, IR_EMIT_L_ANGLE_PIN, GPIO_PIN_RESET)
+
+/** Right Front IR emitter — PA15  ⚠ disable JTAG in CubeMX (SWD only) */
+#define IR_EMIT_RF_PORT         GPIOA
+#define IR_EMIT_RF_PIN          GPIO_PIN_15
+#define IR_EMIT_RF_ON()         HAL_GPIO_WritePin(IR_EMIT_RF_PORT, IR_EMIT_RF_PIN, GPIO_PIN_SET)
+#define IR_EMIT_RF_OFF()        HAL_GPIO_WritePin(IR_EMIT_RF_PORT, IR_EMIT_RF_PIN, GPIO_PIN_RESET)
+
+/** Left Front IR emitter — PB3   ⚠ disable JTAG in CubeMX (SWD only) */
+#define IR_EMIT_LF_PORT         GPIOB
+#define IR_EMIT_LF_PIN          GPIO_PIN_3
+#define IR_EMIT_LF_ON()         HAL_GPIO_WritePin(IR_EMIT_LF_PORT, IR_EMIT_LF_PIN, GPIO_PIN_SET)
+#define IR_EMIT_LF_OFF()        HAL_GPIO_WritePin(IR_EMIT_LF_PORT, IR_EMIT_LF_PIN, GPIO_PIN_RESET)
+
+/** Right Side IR emitter — PB4 */
+#define IR_EMIT_R_SIDE_PORT     GPIOB
+#define IR_EMIT_R_SIDE_PIN      GPIO_PIN_4
+#define IR_EMIT_R_SIDE_ON()     HAL_GPIO_WritePin(IR_EMIT_R_SIDE_PORT, IR_EMIT_R_SIDE_PIN, GPIO_PIN_SET)
+#define IR_EMIT_R_SIDE_OFF()    HAL_GPIO_WritePin(IR_EMIT_R_SIDE_PORT, IR_EMIT_R_SIDE_PIN, GPIO_PIN_RESET)
+
+/** Left Side IR emitter — PB5 */
+#define IR_EMIT_L_SIDE_PORT     GPIOB
+#define IR_EMIT_L_SIDE_PIN      GPIO_PIN_5
+#define IR_EMIT_L_SIDE_ON()     HAL_GPIO_WritePin(IR_EMIT_L_SIDE_PORT, IR_EMIT_L_SIDE_PIN, GPIO_PIN_SET)
+#define IR_EMIT_L_SIDE_OFF()    HAL_GPIO_WritePin(IR_EMIT_L_SIDE_PORT, IR_EMIT_L_SIDE_PIN, GPIO_PIN_RESET)
+
+/**
+ * Fire all 6 emitters simultaneously (use for pulsed differential reads
+ * when cross-talk is not a concern, e.g. open-space ambient calibration).
+ */
+#define IR_ALL_EMITTERS_ON()   do {   \
+    IR_EMIT_R_ANGLE_ON();             \
+    IR_EMIT_L_ANGLE_ON();             \
+    IR_EMIT_RF_ON();                  \
+    IR_EMIT_LF_ON();                  \
+    IR_EMIT_R_SIDE_ON();              \
+    IR_EMIT_L_SIDE_ON();              \
+} while(0)
+
+#define IR_ALL_EMITTERS_OFF()  do {   \
+    IR_EMIT_R_ANGLE_OFF();            \
+    IR_EMIT_L_ANGLE_OFF();            \
+    IR_EMIT_RF_OFF();                 \
+    IR_EMIT_LF_OFF();                 \
+    IR_EMIT_R_SIDE_OFF();             \
+    IR_EMIT_L_SIDE_OFF();             \
+} while(0)
+
+/* ===================================================================== *
+ *  SECTION 7  —  IR RECEIVERS  (ADC1, 6-channel DMA circular scan)
+ *
+ *  Each TEFT4300 phototransistor: collector to 3.3 V via 10 kΩ pull-up,
+ *  emitter to GND.  ADC pin reads the collector voltage.
+ *  High ADC value = less light; low ADC value = more IR light = wall near.
+ *  (Invert in software: differential = ambient_raw - lit_raw)
+ *
+ *  CubeMX:  ADC1 → Continuous conversion: OFF (we trigger manually)
+ *           Scan conversion mode: ON
+ *           DMA request: ENABLE
+ *           DMA: ADC1, Circular, Half-word, Memory increment ON
+ *           External trigger: Software start
+ *           Sample time: 84 cycles per channel (good for 10kΩ source)
+ *
+ *  RANK ORDER matches the DMA buffer index in sensors.c:
+ *    buf[IR_IDX_RS]     rank 1
+ *    buf[IR_IDX_LS]     rank 2
+ *    buf[IR_IDX_RF]     rank 3
+ *    buf[IR_IDX_LF]     rank 4
+ *    buf[IR_IDX_R_ANG]  rank 5
+ *    buf[IR_IDX_L_ANG]  rank 6
+ *    buf[IR_IDX_BATT]   rank 7  ← battery on same scan
+ * ===================================================================== */
+
+/* DMA buffer indices (must match CubeMX rank order) */
+#define IR_IDX_RS          0U   /**< Right Side receiver                 */
+#define IR_IDX_LS          1U   /**< Left  Side receiver                 */
+#define IR_IDX_RF          2U   /**< Right Front receiver                */
+#define IR_IDX_LF          3U   /**< Left  Front receiver                */
+#define IR_IDX_R_ANG       4U   /**< Right Angle receiver                */
+#define IR_IDX_L_ANG       5U   /**< Left  Angle receiver                */
+#define IR_IDX_BATT        6U   /**< Battery voltage (PB0)              */
+#define IR_ADC_BUF_LEN     7U   /**< Total DMA scan length               */
+
+/* Physical pin definitions (for CubeMX GPIO/Analog setup) */
+
+/** Right Side receiver — PA2 — ADC1_IN2, rank 1 */
+#define IR_RECV_RS_PORT         GPIOA
+#define IR_RECV_RS_PIN          GPIO_PIN_2
+#define IR_RECV_RS_ADC_CH       ADC_CHANNEL_2
+#define IR_RECV_RS_ADC_RANK     1U
+
+/** Left Side receiver — PA3 — ADC1_IN3, rank 2 */
+#define IR_RECV_LS_PORT         GPIOA
+#define IR_RECV_LS_PIN          GPIO_PIN_3
+#define IR_RECV_LS_ADC_CH       ADC_CHANNEL_3
+#define IR_RECV_LS_ADC_RANK     2U
+
+/** Right Front receiver — PA4 — ADC1_IN4, rank 3 */
+#define IR_RECV_RF_PORT         GPIOA
+#define IR_RECV_RF_PIN          GPIO_PIN_4
+#define IR_RECV_RF_ADC_CH       ADC_CHANNEL_4
+#define IR_RECV_RF_ADC_RANK     3U
+
+/** Left Front receiver — PA5 — ADC1_IN5, rank 4 */
+#define IR_RECV_LF_PORT         GPIOA
+#define IR_RECV_LF_PIN          GPIO_PIN_5
+#define IR_RECV_LF_ADC_CH       ADC_CHANNEL_5
+#define IR_RECV_LF_ADC_RANK     4U
+
+/** Right Angle receiver — PA6 — ADC1_IN6, rank 5 */
+#define IR_RECV_R_ANG_PORT      GPIOA
+#define IR_RECV_R_ANG_PIN       GPIO_PIN_6
+#define IR_RECV_R_ANG_ADC_CH    ADC_CHANNEL_6
+#define IR_RECV_R_ANG_ADC_RANK  5U
+
+/** Left Angle receiver — PA7 — ADC1_IN7, rank 6 */
+#define IR_RECV_L_ANG_PORT      GPIOA
+#define IR_RECV_L_ANG_PIN       GPIO_PIN_7
+#define IR_RECV_L_ANG_ADC_CH    ADC_CHANNEL_7
+#define IR_RECV_L_ANG_ADC_RANK  6U
+
+/** ADC peripheral */
+#define IR_ADC_INSTANCE         ADC1
+
+/* ===================================================================== *
+ *  SECTION 8  —  BATTERY VOLTAGE ADC  (PB0, ADC1_IN8, rank 7)
+ *
+ *  Voltage divider: Vbat ──┬── 10 kΩ ──┬── 10 kΩ ── GND
+ *                          └── PB0 (ADC)┘
+ *  ADC reads Vbat / 2.  Ref = 3.3 V, 12-bit (4095 counts).
+ *  Vbat = ADC_raw × (3.3 / 4095) × 2
+ *
+ *  CubeMX: PB0 → Analog (no pull).  Add as ADC1 channel IN8, rank 7.
+ *  ⚠  PB0 must NOT be configured as GPIO_Output elsewhere.
+ * ===================================================================== */
+
+#define BATT_ADC_PORT           GPIOB
+#define BATT_ADC_PIN            GPIO_PIN_0
+#define BATT_ADC_CH             ADC_CHANNEL_8
+#define BATT_ADC_RANK           7U
+#define BATT_ADC_INSTANCE       ADC1
+
+/** Convert raw 12-bit ADC value to battery voltage in volts (float) */
+#define BATT_RAW_TO_VOLTS(raw)  ((float)(raw) * (3.3f / 4095.0f) * 2.0f)
+
+/* ===================================================================== *
+ *  SECTION 9  —  IMU / GYROSCOPE  (MPU6500, I2C1)
+ *
+ *  CubeMX:  I2C1 → I2C
+ *           Speed mode:  Fast mode (400 kHz)
+ *           PB8 → I2C1_SCL,  alternate function AF04
+ *           PB9 → I2C1_SDA,  alternate function AF04
+ *           Both pins: Open-drain, Pull-up (external 4.7 kΩ to 3.3 V)
+ *
+ *  ⚠  PB6 (ENC_R_A) and PB7 (ENC_R_B) are TIM4 — NOT I2C.
+ *     PB8 and PB9 are the correct I2C1 pins on STM32F411 AF04.
+ * ===================================================================== */
+
+#define IMU_SCL_PORT            GPIOB
+#define IMU_SCL_PIN             GPIO_PIN_8
+#define IMU_SCL_AF              GPIO_AF4_I2C1
+
+#define IMU_SDA_PORT            GPIOB
+#define IMU_SDA_PIN             GPIO_PIN_9
+#define IMU_SDA_AF              GPIO_AF4_I2C1
+
+#define IMU_I2C_INSTANCE        I2C1
+#define IMU_I2C_SPEED           400000U        /**< 400 kHz fast mode    */
+
+/** MPU6500 7-bit I2C address (AD0 pin tied to GND → 0x68)              */
+#define MPU6500_I2C_ADDR        0x68U
+/** Shifted left 1 for HAL_I2C_xxx functions                            */
+#define MPU6500_I2C_ADDR_8BIT   (MPU6500_I2C_ADDR << 1U)
+
+/* ===================================================================== *
+ *  SECTION 10  —  DIP SWITCHES  (4-bit mode selector, active LOW)
+ *
+ *  All pins: GPIO Input, Pull-up, no speed setting needed.
+ *  Switch CLOSED (ON position) → pin pulled to GND → reads 0 → bit = 1.
+ *
+ *  CubeMX: Configure each as GPIO_Input with Pull-up.
+ *  ⚠  PC13 is also the onboard LED on Black Pill.
+ *     Onboard LED will flicker when DIP4 is toggled — acceptable.
+ *     If this is undesired, route DIP4 to a different GPIO.
+ * ===================================================================== */
+
+/** DIP switch 1 — PA12 */
+#define DIP1_PORT               GPIOA
+#define DIP1_PIN                GPIO_PIN_12
+
+/** DIP switch 2 — PB2 */
+#define DIP2_PORT               GPIOB
+#define DIP2_PIN                GPIO_PIN_2
+
+/** DIP switch 3 — PC14 */
+#define DIP3_PORT               GPIOC
+#define DIP3_PIN                GPIO_PIN_14
+
+/** DIP switch 4 — PC13 */
+#define DIP4_PORT               GPIOC
+#define DIP4_PIN                GPIO_PIN_13
+
+/**
+ * @brief Read all 4 DIP switches as a 4-bit value (0x00–0x0F).
+ *        Bit 0 = DIP1, bit 3 = DIP4.  Switch ON → bit HIGH.
+ * @return uint8_t mode number 0–15
+ */
+static inline uint8_t PINS_READ_DIP(void)
 {
-    uint8_t v = 0;
-    if (HAL_GPIO_ReadPin(PIN_SW0_PORT, PIN_SW0_PIN) == GPIO_PIN_RESET) v |= (1u << 0);
-    if (HAL_GPIO_ReadPin(PIN_SW1_PORT, PIN_SW1_PIN) == GPIO_PIN_RESET) v |= (1u << 1);
-    if (HAL_GPIO_ReadPin(PIN_SW2_PORT, PIN_SW2_PIN) == GPIO_PIN_RESET) v |= (1u << 2);
-    if (HAL_GPIO_ReadPin(PIN_SW3_PORT, PIN_SW3_PIN) == GPIO_PIN_RESET) v |= (1u << 3);
-    return v;
+    uint8_t mode = 0U;
+    if (HAL_GPIO_ReadPin(DIP1_PORT, DIP1_PIN) == GPIO_PIN_RESET) mode |= (1U << 0U);
+    if (HAL_GPIO_ReadPin(DIP2_PORT, DIP2_PIN) == GPIO_PIN_RESET) mode |= (1U << 1U);
+    if (HAL_GPIO_ReadPin(DIP3_PORT, DIP3_PIN) == GPIO_PIN_RESET) mode |= (1U << 2U);
+    if (HAL_GPIO_ReadPin(DIP4_PORT, DIP4_PIN) == GPIO_PIN_RESET) mode |= (1U << 3U);
+    return mode;
 }
+
+/* ===================================================================== *
+ *  SECTION 11  —  TEST / USER BUTTON  (active LOW)
+ *
+ *  CubeMX: PC15 → GPIO_Input, Pull-up
+ *  Press = GND → reads GPIO_PIN_RESET → pressed.
+ * ===================================================================== */
+
+#define BTN_PORT                GPIOC
+#define BTN_PIN                 GPIO_PIN_15
+
+/** Returns non-zero (true) when button is pressed */
+#define BTN_PRESSED()           (HAL_GPIO_ReadPin(BTN_PORT, BTN_PIN) == GPIO_PIN_RESET)
+
+/**
+ * @brief Blocking wait until button is pressed and released.
+ *        Includes 20 ms software debounce.
+ */
+static inline void BTN_WAIT_PRESS(void)
+{
+    while (!BTN_PRESSED()) {}
+    HAL_Delay(20U);   /* debounce */
+    while (BTN_PRESSED()) {}
+    HAL_Delay(20U);
+}
+
+/* ===================================================================== *
+ *  SECTION 12  —  BUZZER  (PB1, active HIGH via NPN/MOSFET)
+ *
+ *  CubeMX: PB1 → GPIO_Output, No pull, Push-pull, Low speed
+ *  Wiring: PB1 → 100 Ω → base/gate → transistor/MOSFET → buzzer → GND
+ * ===================================================================== */
+
+#define BUZZER_PORT             GPIOB
+#define BUZZER_PIN              GPIO_PIN_1
+
+#define BUZZER_ON()             HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_SET)
+#define BUZZER_OFF()            HAL_GPIO_WritePin(BUZZER_PORT, BUZZER_PIN, GPIO_PIN_RESET)
+#define BUZZER_TOGGLE()         HAL_GPIO_TogglePin(BUZZER_PORT, BUZZER_PIN)
+
+/**
+ * @brief Blocking single beep.
+ * @param ms Duration in milliseconds.
+ */
+static inline void BUZZER_BEEP(uint32_t ms)
+{
+    BUZZER_ON();
+    HAL_Delay(ms);
+    BUZZER_OFF();
+}
+
+/* ===================================================================== *
+ *  SECTION 13  —  STATUS LED  (onboard PC13, active LOW)
+ *
+ *  CubeMX: PC13 → GPIO_Output (shared with DIP4 on Black Pill hardware)
+ *  Active LOW: writing GPIO_PIN_RESET turns LED ON.
+ *  ⚠  PC13 is shared between DIP4 and the onboard LED on Black Pill.
+ *     During operation: use READ_DIP() at startup only (before motion).
+ *     During run: use LED macros freely.
+ * ===================================================================== */
+
+#define LED_PORT                GPIOC
+#define LED_PIN                 GPIO_PIN_13
+
+#define LED_ON()                HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET)
+#define LED_OFF()               HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET)
+#define LED_TOGGLE()            HAL_GPIO_TogglePin(LED_PORT, LED_PIN)
+
+/* ===================================================================== *
+ *  SECTION 14  —  CUBEMX PERIPHERAL SUMMARY (reference only)
+ *
+ *  Copy these settings into STM32CubeMX exactly as shown.
+ *
+ *  ┌─────────────┬───────────────┬────────────────────────────────────┐
+ *  │ Peripheral  │ Mode          │ Key settings                        │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ TIM1        │ PWM Gen CH1+2 │ PSC=0, ARR=4999, Preload=EN        │
+ *  │             │               │ CH1=PA8 AF01, CH2=PA9 AF01         │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ TIM2        │ Encoder TI1+2 │ Period=0xFFFFFFFF, PA0/PA1 AF01    │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ TIM4        │ Encoder TI1+2 │ Period=0xFFFF, PB6/PB7 AF02        │
+ *  │             │               │ NVIC: TIM4 global IRQ ENABLED       │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ TIM5        │ Timer Intr    │ PSC=99, ARR=999 → 1 kHz            │
+ *  │             │               │ NVIC: TIM5 global IRQ, priority 1  │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ ADC1        │ Scan+DMA      │ 7 ranks (IN2–IN8), 84cyc each      │
+ *  │             │               │ DMA: Circular, Half-word, MemInc   │
+ *  │             │               │ Trigger: Software                   │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ I2C1        │ I2C 400 kHz   │ PB8 SCL AF04, PB9 SDA AF04        │
+ *  │             │               │ External 4.7 kΩ pull-ups on both   │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ GPIO OUT    │ Push-pull     │ PB1,PB3,PB4,PB5,PB10,             │
+ *  │             │               │ PB12,PB13,PB14,PB15,               │
+ *  │             │               │ PA10,PA11,PA15,PC13                │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ GPIO IN PU  │ Pull-up       │ PA12,PB2,PC14,PC15                 │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ GPIO Analog │ No pull       │ PA2,PA3,PA4,PA5,PA6,PA7,PB0        │
+ *  ├─────────────┼───────────────┼────────────────────────────────────┤
+ *  │ SYS/Debug   │ Serial Wire   │ Disable JTAG → frees PA15 + PB3    │
+ *  └─────────────┴───────────────┴────────────────────────────────────┘
+ * ===================================================================== */
+
+/* ===================================================================== *
+ *  SECTION 15  —  COMPLETE PIN CONFLICT MATRIX (verified)
+ *
+ *  Pin   Signal        Peripheral  Notes
+ *  ────  ────────────  ──────────  ──────────────────────────────────
+ *  PA0   L_EN_A        TIM2_CH1    Left encoder A                   ✓
+ *  PA1   L_EN_B        TIM2_CH2    Left encoder B                   ✓
+ *  PA2   RS_RE         ADC1_IN2    Right side IR receiver           ✓
+ *  PA3   LS_RE         ADC1_IN3    Left  side IR receiver           ✓
+ *  PA4   RF_RE         ADC1_IN4    Right front IR receiver          ✓
+ *  PA5   LF_RE         ADC1_IN5    Left  front IR receiver          ✓
+ *  PA6   R_AnRE        ADC1_IN6    Right angle IR receiver          ✓
+ *  PA7   L_AnRE        ADC1_IN7    Left  angle IR receiver          ✓
+ *  PA8   LM_SIG        TIM1_CH1    Left  motor PWM                  ✓
+ *  PA9   RM_SIG        TIM1_CH2    Right motor PWM                  ✓
+ *  PA10  R_ANGLE_EM    GPIO OUT    Right angle IR emitter           ✓
+ *  PA11  L_ANGLE_EM    GPIO OUT    Left  angle IR emitter           ✓
+ *  PA12  DIP1          GPIO IN PU  DIP switch 1                     ✓
+ *  PA15  RF_EM         GPIO OUT    Right front IR emitter           ✓
+ *        ⚠ PA15 = JTDI by default → disable JTAG in CubeMX
+ *  PB0   VOLTMETER     ADC1_IN8    Battery voltage divider          ✓
+ *  PB1   Buzzer        GPIO OUT    Piezo buzzer (via transistor)    ✓
+ *  PB2   DIP2          GPIO IN PU  DIP switch 2                     ✓
+ *  PB3   LF_EM         GPIO OUT    Left front IR emitter            ✓
+ *        ⚠ PB3 = JTDO by default → disable JTAG in CubeMX
+ *  PB4   R_SIDE_EM     GPIO OUT    Right side IR emitter            ✓
+ *  PB5   L_SIDE_EM     GPIO OUT    Left  side IR emitter            ✓
+ *  PB6   R_EN_A        TIM4_CH1    Right encoder A                  ✓
+ *  PB7   R_EN_B        TIM4_CH2    Right encoder B                  ✓
+ *  PB8   G_SCL         I2C1_SCL    IMU I2C clock                    ✓
+ *  PB9   G_SDA         I2C1_SDA    IMU I2C data                     ✓
+ *  PB10  STBY          GPIO OUT    Motor driver standby             ✓
+ *  PB12  LM_CNT1       GPIO OUT    Left  motor AIN1 (dir)           ✓
+ *  PB13  LM_CNT2       GPIO OUT    Left  motor AIN2 (dir)           ✓
+ *  PB14  RM_CNT1       GPIO OUT    Right motor BIN1 (dir)           ✓
+ *  PB15  RM_CNT2       GPIO OUT    Right motor BIN2 (dir)           ✓
+ *  PC13  DIP4 / LED    GPIO OUT    DIP switch 4 / Onboard LED       ✓
+ *        ⚠ Shared — read DIP at boot only, then use for LED
+ *  PC14  DIP3          GPIO IN PU  DIP switch 3                     ✓
+ *  PC15  TB1           GPIO IN PU  Test/user button                 ✓
+ *
+ *  UNUSED / RESERVED (leave unconnected or assign to future use):
+ *  PA13  SWDIO         SWD         Debug (keep reserved)
+ *  PA14  SWDCLK        SWD         Debug (keep reserved)
+ * ===================================================================== */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* PINS_H */
