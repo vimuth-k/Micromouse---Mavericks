@@ -72,6 +72,7 @@
 #include "logger.h"
 #include "flash_storage.h"
 #include "config.h"
+#include "main.h"     /* HAL_FLASH_Program/Lock, HAL_StatusTypeDef */
 #include <string.h>
 
 /* =========================================================================
@@ -471,9 +472,16 @@ bool maze_is_fully_explored(void)
  *            [0x104]visited  : uint8_t[16][16] = 256 bytes
  *            Total           : 4 + 256 + 256 = 516 bytes
  *
- *          Written word-by-word using HAL_FLASH_Program.
- *          Flash erase of sector 7 is done by flash_storage.c before
- *          this function writes — shared sector with calibration data.
+ *          Written word-by-word using HAL_FLASH_Program. The erase step
+ *          is delegated to flash_storage_prepare_write(), which backs
+ *          up the IR calibration struct (if present) before erasing the
+ *          shared sector and restores it immediately after — sector 7
+ *          also holds Drivers/ir.c's saved calibration at
+ *          FLASH_CAL_ADDR, and the STM32F4 can only erase a sector as a
+ *          whole, so saving the maze map alone would otherwise wipe it.
+ *          This also makes repeated maze saves safe: without an erase
+ *          here, a second save over already-programmed Flash bytes
+ *          would corrupt rather than update them.
  *
  * @warning This function takes ~100 ms to complete (Flash erase).
  *          Call only from the main loop, never from the ISR.
@@ -483,8 +491,10 @@ MmResult_t maze_save_to_flash(void)
     HAL_StatusTypeDef st;
     uint32_t addr = FLASH_MAZE_ADDR;
 
-    st = HAL_FLASH_Unlock();
-    if (st != HAL_OK) { return MM_ERR_STORAGE; }
+    if (flash_storage_prepare_write(FLASH_REGION_MAZE) != MM_OK)
+    {
+        return MM_ERR_STORAGE;
+    }
 
     /* Write magic word */
     st = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, addr, FLASH_MAZE_MAGIC);
