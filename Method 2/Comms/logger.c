@@ -196,6 +196,13 @@ void logger_log(LogLevel_t level, const char *fmt, ...)
 #endif /* LOG_ENABLED */
 }
 
+void logger_flush(void)
+{
+    /* No-op — see the Doxygen comment in logger.h. Every LOG_* call
+     * already blocks until its bytes are transmitted, so there is
+     * nothing buffered to flush with the current synchronous design. */
+}
+
 void logger_raw(const char *fmt, ...)
 {
 #if LOG_ENABLED
