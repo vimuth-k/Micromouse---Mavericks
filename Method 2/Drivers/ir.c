@@ -67,6 +67,7 @@
 #include "config.h"
 #include "main.h"
 #include "utils.h"
+#include "flash_storage.h"
 #include <string.h>
 
 /* =========================================================================
@@ -497,6 +498,12 @@ void ir_cal_wall(void)
 
 /**
  * @brief  Write calibration data to Flash sector 7.
+ * @details The erase step is delegated to flash_storage_prepare_write(),
+ *          which backs up the maze wall map (if present) before erasing
+ *          the shared sector and restores it immediately after — sector
+ *          7 also holds Maze solve/maze.c's saved wall map at
+ *          FLASH_MAZE_ADDR, and the STM32F4 can only erase a sector as
+ *          a whole, so saving calibration alone would otherwise wipe it.
  */
 MmResult_t ir_cal_save(void)
 {
@@ -505,22 +512,11 @@ MmResult_t ir_cal_save(void)
 
     HAL_StatusTypeDef status;
 
-    /* Unlock Flash for write access */
-    status = HAL_FLASH_Unlock();
-    if (status != HAL_OK) { return MM_ERR_STORAGE; }
-
-    /* Erase the calibration sector */
-    FLASH_EraseInitTypeDef erase_init = {
-        .TypeErase    = FLASH_TYPEERASE_SECTORS,
-        .Sector       = FLASH_CAL_SECTOR,
-        .NbSectors    = 1U,
-        .VoltageRange = FLASH_VOLTAGE_RANGE_3,
-    };
-    uint32_t sector_error = 0U;
-    status = HAL_FLASHEx_Erase(&erase_init, &sector_error);
-    if (status != HAL_OK)
+    /* Unlock + erase (preserving the maze region) is handled centrally
+     * — see flash_storage.h for why this can't be done independently
+     * per-module on a chip that only erases whole sectors. */
+    if (flash_storage_prepare_write(FLASH_REGION_CAL) != MM_OK)
     {
-        (void)HAL_FLASH_Lock();
         return MM_ERR_STORAGE;
     }
 
