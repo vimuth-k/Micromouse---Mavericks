@@ -137,6 +137,20 @@ void logger_log(LogLevel_t level, const char *fmt, ...)
     ;
 
 /**
+ * @brief  Flush any buffered but not-yet-transmitted log output.
+ *
+ * @details This logger transmits synchronously — every LOG_* call
+ *          blocks (bounded by LOG_UART_TIMEOUT_MS) until its own bytes
+ *          are on the wire, so there is never anything left pending
+ *          when logger_log()/logger_raw() return. logger_flush() is a
+ *          deliberate no-op kept for API symmetry with scheduler.c's
+ *          10 ms log_flush_task slot, and as the extension point if
+ *          logger.c ever moves to a buffered/DMA transmit (at which
+ *          point this becomes real work instead of a no-op).
+ */
+void logger_flush(void);
+
+/**
  * @brief  Transmit one line with no timestamp, no level tag, and no
  *         automatic newline. Called by the LOG_RAW macro — not
  *         normally called directly.
