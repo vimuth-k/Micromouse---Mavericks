@@ -268,13 +268,10 @@ static MmResult_t modules_init(void)
     /* ── Navigation layer ──────────────────────────────────── */
     maze_init();
     floodfill_init();
-    explorer_init();
-    speedrun_init();
 
     /* ── System layer ──────────────────────────────────────────────── */
     modes_init();
     scheduler_init();
-    diagnostics_init();
 
     return MM_OK;
 }
