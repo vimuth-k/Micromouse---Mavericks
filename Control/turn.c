@@ -1,32 +1,20 @@
 /**
  * @file    turn.c
  * @brief   MicroMaze 3 · Heading tracker and path/move executor — implementation.
- * @details See turn.h for the full design rationale, including why the
- *          low-level turn PID and the heading-diff-to-turn-type math
- *          are deliberately NOT duplicated here (they already live in
- *          motion.c and path_optimizer.c respectively).
  *
  * @author  VDawn
  * @date    2026
  */
+
 #include "turn.h"
 #include "config.h"
 #include "error.h"
 #include "motion.h"
-#include "maze.h"       /* DIR_N/E/S/W */
+#include "maze.h"
 #include "safety.h"
 #include "oled.h"
 
-/* ═══════════════════════════════════════════════════════════════════════
- * Module state
- * ═══════════════════════════════════════════════════════════════════════ */
-
-/** Tracked absolute heading (DIR_N/E/S/W). */
 static uint8_t s_heading = DIR_N;
-
-/* ═══════════════════════════════════════════════════════════════════════
- * Public API
- * ═══════════════════════════════════════════════════════════════════════ */
 
 MmResult_t turn_init(void)
 {
@@ -45,7 +33,6 @@ void turn_execute_move(const PathMove_t *move)
     {
         case MOVE_FORWARD:
             move_forward(move->cells, move->speed);
-            /* Heading unchanged. */
             break;
 
         case MOVE_TURN_RIGHT:
@@ -57,7 +44,7 @@ void turn_execute_move(const PathMove_t *move)
         case MOVE_TURN_LEFT:
             motion_align_front();
             motion_turn_left();
-            s_heading = (uint8_t)((s_heading + 3U) % 4U);  /* +3 == -1 mod 4 */
+            s_heading = (uint8_t)((s_heading + 3U) % 4U);
             break;
 
         case MOVE_TURN_180:
@@ -68,7 +55,6 @@ void turn_execute_move(const PathMove_t *move)
 
         case MOVE_DONE:
         default:
-            /* Sentinel / unrecognised — nothing to execute. */
             break;
     }
 }
