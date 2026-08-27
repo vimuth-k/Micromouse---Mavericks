@@ -69,7 +69,7 @@ static void explorer_step_toward(uint8_t dir)
  * @param  mode        Flood-fill seeding mode for this phase.
  * @param  at_target    Returns true when the current cell is where this
  *                      phase is trying to reach.
- * @param  phase_name  Short label for log messages ("search"/"return").
+ * @param  phase_name  Short label ("search"/"return").
  *
  * @return MM_OK           at_target() became true.
  * @return MM_ERR_GENERAL  Cell limit reached, no valid move, or a
@@ -79,7 +79,6 @@ static MmResult_t explorer_run_loop(FloodMode_t mode, bool (*at_target)(void),
                                      const char *phase_name)
 {
     (void)phase_name;
-
     for (uint16_t cell_count = 0U; cell_count < EXPLORER_MAX_CELLS; cell_count++)
     {
         maze_update_walls_from_sensors(maze.robot_row, maze.robot_col, maze.robot_heading);
@@ -120,11 +119,6 @@ static bool at_start(void)
 /* ═══════════════════════════════════════════════════════════════════════
  * Public API
  * ═══════════════════════════════════════════════════════════════════════ */
-
-MmResult_t explorer_init(void)
-{
-    return MM_OK;
-}
 
 MmResult_t explorer_search_to_goal(void)
 {
