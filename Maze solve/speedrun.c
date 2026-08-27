@@ -1,12 +1,11 @@
 /**
  * @file    speedrun.c
  * @brief   MicroMaze 3 · Execute the optimised path at speed — implementation.
- * @details See speedrun.h for the full design rationale, including why
- *          this is a pure open-loop executor with no per-cell sensing.
  *
  * @author  VDawn
  * @date    2026
  */
+
 #include "speedrun.h"
 #include "config.h"
 #include "error.h"
@@ -16,19 +15,9 @@
 #include "turn.h"
 #include "safety.h"
 #include "oled.h"
-#include "main.h"     /* HAL_GetTick */
+#include "main.h"
 
-/** Raw direction-sequence buffer. floodfill_extract_path()'s buf_len
- *  parameter is uint8_t (max 255) — NOT MAZE_SIZE*MAZE_SIZE (256),
- *  which would silently truncate to 0 when passed as a uint8_t
- *  argument and make every call report "no path found". 255 is also
- *  the correct theoretical bound regardless: a simple (no-revisit)
- *  path through all 256 cells has exactly 255 steps between them. */
 #define SPEEDRUN_DIR_BUF_LEN  255U
-
-/* ═══════════════════════════════════════════════════════════════════════
- * Public API
- * ═══════════════════════════════════════════════════════════════════════ */
 
 MmResult_t speedrun_run(float speed_mmps)
 {
@@ -50,8 +39,6 @@ MmResult_t speedrun_run(float speed_mmps)
 
     const OptPath_t *path = path_optimizer_get();
 
-    /* The robot is assumed to physically be at the start cell — sync
-     * both position trackers before executing. */
     maze_set_position(START_ROW, START_COL, DIR_N);
     turn_set_heading(DIR_N);
 
