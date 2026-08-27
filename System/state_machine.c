@@ -73,12 +73,6 @@ static bool is_valid_transition(RobotState_t from, RobotState_t to)
  * Public API
  * ═══════════════════════════════════════════════════════════════════════ */
 
-MmResult_t state_machine_init(void)
-{
-    s_state = ROBOT_STATE_IDLE;
-    return MM_OK;
-}
-
 MmResult_t state_machine_transition(RobotState_t new_state)
 {
     if (new_state > ROBOT_STATE_ERROR)
@@ -113,36 +107,4 @@ MmResult_t state_machine_transition(RobotState_t new_state)
 
     s_state = new_state;
     return MM_OK;
-}
-
-RobotState_t state_machine_get_state(void)
-{
-    return s_state;
-}
-
-const char *state_machine_state_name(RobotState_t state)
-{
-    switch (state)
-    {
-        case ROBOT_STATE_IDLE:         return "IDLE";
-        case ROBOT_STATE_SEARCHING:    return "SEARCHING";
-        case ROBOT_STATE_RETURNING:    return "RETURNING";
-        case ROBOT_STATE_SPEEDRUNNING: return "SPEEDRUNNING";
-        case ROBOT_STATE_FINISHED:     return "FINISHED";
-        case ROBOT_STATE_ERROR:        return "ERROR";
-        default:                       return "UNKNOWN";
-    }
-}
-
-bool state_machine_is_active(void)
-{
-    return is_active_state(s_state);
-}
-
-void state_machine_tick(void)
-{
-    if (is_active_state(s_state) && safety_is_tripped())
-    {
-        (void)state_machine_transition(ROBOT_STATE_ERROR);
-    }
 }
