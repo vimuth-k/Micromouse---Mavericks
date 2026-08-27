@@ -12,8 +12,8 @@
  *      an OLED prompt, then waits on buttons_wait_for_press() (up to
  *      CAL_IR_CONFIRM_TIMEOUT_MS) so the operator can take as long as
  *      they need to position the robot before confirming — if the
- *      button is not pressed within the timeout, calibration.c logs a
- *      warning and proceeds anyway rather than hanging indefinitely.
+ *      button is not pressed within the timeout, calibration.c
+ *      proceeds anyway rather than hanging indefinitely.
  *
  *   2. gyro_cal_run() — automatic, called unconditionally from main.c's
  *      boot sequence every single boot, before motion_init() starts the
