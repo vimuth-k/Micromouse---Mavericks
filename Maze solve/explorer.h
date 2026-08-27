@@ -52,17 +52,6 @@ extern "C" {
 #endif
 
 /**
- * @brief  Initialise the explorer module.
- * @details Currently stateless between runs — all persistent state
- *          lives in maze.c's tracker and floodfill.c's distance map,
- *          both reset independently. Kept as its own init call for
- *          lifecycle consistency with every other module, and as the
- *          natural place to add explorer-specific state later.
- * @return MM_OK always.
- */
-MmResult_t explorer_init(void);
-
-/**
  * @brief  Flood-fill search from the robot's current tracked position
  *         until any goal cell is reached.
  *
