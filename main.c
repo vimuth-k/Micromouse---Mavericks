@@ -23,6 +23,7 @@
  *
  *          No onboard LED, no buzzer, no UART1 — all dropped or blocked;
  *          every GPIO on the UFQFPN48 package is committed elsewhere.
+ *          OLED display serves as the primary visual status output.
  *
  *          CUBEMX SETTINGS REQUIRED
  *          ─────────────────────────
@@ -39,7 +40,6 @@
  */
 
 #include "main.h"
-#include <stddef.h>   /* NULL */
 
 /* ── Module includes (dependency order — lower layers first) ─────────── */
 #include "config.h"
@@ -117,7 +117,6 @@ static void adc1_ir_battery_init(void);
 static void i2c1_init(void);
 
 static MmResult_t modules_init(void);
-static void       run_selected_mode(uint8_t mode);
 
 /* =========================================================================
  * MAIN ENTRY POINT
@@ -133,7 +132,7 @@ static void       run_selected_mode(uint8_t mode);
  *   4.  Peripheral init   — GPIO, DMA, timers, ADC, I2C, UART.
  *   5.  modules_init      — drivers, control, navigation, system layers.
  *   6.  DIP switch read   — determines which mode to run.
- *   7.  run_selected_mode — blocking mode dispatcher, never returns.
+ *   7.  modes_run         — blocking mode dispatcher, never returns.
  *
  * @return int  Never reached (embedded infinite loop).
  */
@@ -187,7 +186,7 @@ int main(void)
     oled_show_mode(mode);
 
     /* ── 8. Blocking mode dispatcher ───────────────────────────────── */
-    run_selected_mode(mode);
+    modes_run(mode);
 
     /* Should never reach here — every mode runs an infinite loop or
      * blocks until its task is complete then halts.                    */
@@ -208,7 +207,7 @@ int main(void)
  *          error code on failure.  Initialisation stops at the first
  *          failure and the error code is returned to main().
  *
- *          Order: Utils → Drivers → Calibration load → Control → Navigation
+ *          Order: Utils → Drivers → Calibration load → Control → Navigation → System
  *
  * @return MM_OK if all modules initialised successfully.
  * @return Error code from the first module that failed.
@@ -220,7 +219,6 @@ static MmResult_t modules_init(void)
     /* ── Drivers layer ─────────────────────────────────────────────── */
 
     motors_init();          /* PWM channels, direction pins, STBY LOW   */
-
     encoders_init();        /* TIM2 + TIM3 encoder start                */
 
     result = ir_init();     /* ADC1 DMA start, load cal from Flash      */
@@ -274,82 +272,11 @@ static MmResult_t modules_init(void)
     speedrun_init();
 
     /* ── System layer ──────────────────────────────────────────────── */
+    modes_init();
     scheduler_init();
     diagnostics_init();
 
     return MM_OK;
-}
-
-/* =========================================================================
- * MODE DISPATCHER
- * ======================================================================= */
-
-/**
- * @brief  Function pointer type for a no-argument DIP mode handler.
- */
-typedef void (*ModeHandler_t)(void);
-
-/**
- * @brief  Dispatch table for every DIP mode that takes no run-time
- *         parameter, indexed directly by mode value 0–15.
- *
- * @details Modes 7–9 (the three speed-run variants) are NOT in this
- *          table — they all call the same modes_run_speed(float)
- *          with a different constant, so run_selected_mode() handles
- *          them as a small explicit range check instead of forcing
- *          three artificial no-arg wrapper functions into modes.c
- *          just to fit the table's shape. MODE_RESERVED (15) is left
- *          NULL and falls through to the monitor default below.
- */
-static const ModeHandler_t s_mode_handlers[16] =
-{
-    [MODE_MONITOR]        = modes_run_monitor,
-    [MODE_IR_CALIBRATE]   = modes_run_ir_calibrate,
-    [MODE_MOTOR_TEST]     = modes_run_motor_test,
-    [MODE_STRAIGHT_TEST]  = modes_run_straight_test,
-    [MODE_TURN_TEST]      = modes_run_turn_test,
-    [MODE_WALL_FOLLOWER]  = modes_run_wall_follower,
-    [MODE_SEARCH_RUN]     = modes_run_search,
-    [MODE_AUTO_QUALIFIER] = modes_run_auto_qualifier,
-    [MODE_GYRO_DEBUG]     = modes_run_gyro_debug,
-    [MODE_PRINT_MAZE]     = modes_run_print_maze,
-    [MODE_BATTERY_CHECK]  = modes_run_battery_check,
-    [MODE_STARTUP_TEST]   = modes_run_startup_test,
-};
-
-/**
- * @brief  Dispatch to the function for the DIP-selected operating mode.
- *
- * @details This function never returns under normal operation.  Each
- *          mode function either loops indefinitely or performs its task
- *          and then halts in an idle loop.
- *
- * @param  mode  DIP switch value 0–15 (from READ_DIP_SWITCHES()).
- */
-static void run_selected_mode(uint8_t mode)
-{
-    if ((mode >= MODE_SPEED_RUN_1) && (mode <= MODE_SPEED_RUN_3))
-    {
-        static const float speeds[3] = { SPD_RUN1, SPD_RUN2, SPD_RUN3 };
-        modes_run_speed(speeds[mode - MODE_SPEED_RUN_1]);
-    }
-    else if ((mode < 16U) && (s_mode_handlers[mode] != NULL))
-    {
-        s_mode_handlers[mode]();
-    }
-    else
-    {
-        modes_run_monitor();
-    }
-
-    /* All mode functions should loop internally.  If any returns,
-     * halt safely with motors off.                                     */
-    motors_disable();
-
-    while (1)
-    {
-        HAL_Delay(500U);
-    }
 }
 
 /* =========================================================================
@@ -362,8 +289,8 @@ static void run_selected_mode(uint8_t mode)
  * @details Disables motors, displays the error code on the OLED,
  *          and halts forever. No onboard LED or buzzer is
  *          available on this board revision (PC13 is committed to
- *          MPU6500_INT) — the OLED is the primary error
- *          channel. Never returns.
+ *          MPU6500_INT) — the OLED is the primary error channel.
+ *          Never returns.
  *
  * @param  err  Error code from the failing module (MmResult_t).
  */
@@ -878,15 +805,6 @@ static void i2c1_init(void)
 
     (void)HAL_I2C_Init(&hi2c1);
 }
-
-/* NOTE: UART1 is not usable on this pin map. Its TX pin (PA9) is
- * TIM1_CH2 (motor PWM) — a hard conflict, not a firmware choice.
- * USB CDC was the planned fallback (no extra pin needed), but the
- * Black Pill's USB connector is hardwired to PA11/PA12, which are
- * L_ANGLE_EM and DIP1 in this pin map — also blocked. SWO trace uses
- * PB3 (LF_EM) — also blocked. Every alternate UART/debug path was
- * checked and is committed elsewhere; see pins.h Section 13 for the
- * full conflict matrix. */
 
 /* =========================================================================
  * HARD FAULT HANDLER
