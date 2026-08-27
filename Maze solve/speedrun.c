@@ -30,11 +30,6 @@
  * Public API
  * ═══════════════════════════════════════════════════════════════════════ */
 
-MmResult_t speedrun_init(void)
-{
-    return MM_OK;
-}
-
 MmResult_t speedrun_run(float speed_mmps)
 {
     uint8_t dirs[SPEEDRUN_DIR_BUF_LEN];
