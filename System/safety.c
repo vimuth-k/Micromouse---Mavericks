@@ -44,11 +44,7 @@ static SafetyTripReason_t s_trip_reason = SAFETY_TRIP_NONE;
  * ═══════════════════════════════════════════════════════════════════════ */
 
 /**
- * @brief  Latch a trip: record the reason, and stop the
- *         robot. Safe to call repeatedly — the stop
- *         commands are idempotent from the caller's side (motion_stop()
- *         and motors_disable() are both safe to call when already
- *         stopped/disabled).
+ * @brief  Latch a trip: record the reason and stop the robot.
  */
 static void trip(SafetyTripReason_t reason, const char *why)
 {
@@ -108,10 +104,11 @@ void safety_check(void)
 
     if (driven)
     {
-        float avg_spd = (status.meas_speed_l + status.meas_speed_r) * 0.5f;
-        if (avg_spd < 0.0f) { avg_spd = -avg_spd; }
+        float abs_l = (status.meas_speed_l < 0.0f) ? -status.meas_speed_l : status.meas_speed_l;
+        float abs_r = (status.meas_speed_r < 0.0f) ? -status.meas_speed_r : status.meas_speed_r;
+        float avg_spd_mag = (abs_l + abs_r) * 0.5f;
 
-        if (avg_spd < SAFETY_STALL_SPD_MMPS)
+        if (avg_spd_mag < SAFETY_STALL_SPD_MMPS)
         {
             if (s_stall_since_ms == 0U)
             {
@@ -186,6 +183,7 @@ SafetyTripReason_t safety_trip_reason(void)
 
 void safety_clear(void)
 {
-    s_tripped     = false;
-    s_trip_reason = SAFETY_TRIP_NONE;
+    s_tripped         = false;
+    s_trip_reason     = SAFETY_TRIP_NONE;
+    s_stall_since_ms  = 0U;
 }
