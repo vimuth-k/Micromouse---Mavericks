@@ -64,6 +64,7 @@ MmResult_t gyro_cal_run(void)
 
     float offset_dps = sum_dps / (float)GYRO_CAL_SAMPLES;
     imu_set_gyro_offset(offset_dps);
+    imu_reset_yaw();
 
     return MM_OK;
 }
