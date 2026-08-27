@@ -25,11 +25,6 @@
  * Public API
  * ═══════════════════════════════════════════════════════════════════════ */
 
-MmResult_t diagnostics_init(void)
-{
-    return MM_OK;
-}
-
 MmResult_t diagnostics_run_monitor(void)
 {
     buttons_update();
