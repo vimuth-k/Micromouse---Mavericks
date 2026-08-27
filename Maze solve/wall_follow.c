@@ -65,11 +65,6 @@ static void wall_follow_step(void)
  * Public API
  * ═══════════════════════════════════════════════════════════════════════ */
 
-MmResult_t wall_follow_init(void)
-{
-    return MM_OK;
-}
-
 MmResult_t wall_follow_run(void)
 {
     for (uint16_t cell_count = 0U; cell_count < WALL_FOLLOW_MAX_CELLS; cell_count++)
