@@ -1,12 +1,11 @@
 /**
  * @file    wall_follow.c
  * @brief   MicroMaze 3 · Left-hand-rule fallback maze solver — implementation.
- * @details See wall_follow.h for the full design rationale, including
- *          why this uses maze.c's position tracker instead of turn.c's.
  *
  * @author  VDawn
  * @date    2026
  */
+
 #include "wall_follow.h"
 #include "config.h"
 #include "error.h"
@@ -15,18 +14,8 @@
 #include "ir.h"
 #include "safety.h"
 
-/* ═══════════════════════════════════════════════════════════════════════
- * Internal helpers
- * ═══════════════════════════════════════════════════════════════════════ */
-
-/**
- * @brief  Sense, decide, and execute one left-hand-rule step, advancing
- *         exactly one cell.
- */
 static void wall_follow_step(void)
 {
-    /* Record whatever this cell's sensors see, regardless of which way
-     * the algorithm ends up going — free map data for later. */
     maze_update_walls_from_sensors(maze.robot_row, maze.robot_col, maze.robot_heading);
 
     bool left_clear  = !ir_wall_left();
@@ -35,13 +24,13 @@ static void wall_follow_step(void)
 
     if (left_clear)
     {
-        motion_align_front();   /* No-op if there's no front wall to square against. */
+        motion_align_front();
         motion_turn_left();
         maze_turn_left();
     }
     else if (front_clear)
     {
-        /* Straight ahead — no turn needed. */
+        /* Straight ahead */
     }
     else if (right_clear)
     {
@@ -51,7 +40,6 @@ static void wall_follow_step(void)
     }
     else
     {
-        /* Dead end on all three sides — turn back. */
         motion_align_front();
         motion_turn_180();
         maze_turn_180();
@@ -60,10 +48,6 @@ static void wall_follow_step(void)
     move_forward(1U, SPD_SEARCH);
     maze_advance(maze.robot_heading);
 }
-
-/* ═══════════════════════════════════════════════════════════════════════
- * Public API
- * ═══════════════════════════════════════════════════════════════════════ */
 
 MmResult_t wall_follow_run(void)
 {
