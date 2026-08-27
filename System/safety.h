@@ -33,19 +33,17 @@
  *   RUN LIFECYCLE
  *   ─────────────────────────────────────────────────────────────────────
  *   Checks 3 and 4 (run timeout, max distance) only make sense relative
- *   to a run's start. Call safety_run_start() once when a maze
- *   run/search/speedrun begins (from modes.c, not yet written) — this
- *   resets the run clock and the cumulative distance accumulator.
- *   Checks 1, 2, and 5 are always active regardless of run state.
+ *   to a run's start. Call safety_run_start() when a maze run/search/speedrun
+ *   begins (driven by state_machine_transition()) — this resets the run clock
+ *   and the cumulative distance accumulator. Checks 1, 2, and 5 are always
+ *   active regardless of run state.
  *
  *   TRIP STATE
  *   ─────────────────────────────────────────────────────────────────────
  *   When any check fires, safety.c records which one via
  *   safety_trip_reason() and latches safety_is_tripped() true. The
  *   latch persists — including across further safety_check() calls —
- *   until safety_clear() is called explicitly, so a state machine (not
- *   yet written) can detect the stop, react (display the reason, wait
- *   for operator acknowledgement), and clear it before the next run.
+ *   until safety_clear() is called explicitly.
  *
  * @author  VDawn
  * @date    2026
@@ -98,8 +96,7 @@ void safety_run_start(void);
  *         scheduler at SCHED_SAFETY_INTERVAL_MS (50 ms) — not normally
  *         called directly.
  * @details Any check that fires calls motors_disable() and/or
- *          motion_stop() as appropriate,
- *          and latches the trip (see safety_is_tripped()).
+ *          motion_stop() as appropriate, and latches the trip (see safety_is_tripped()).
  *          If a trip is already latched, subsequent calls still run all
  *          checks (so a worse condition can overwrite the recorded
  *          reason) but do not re-issue the stop commands redundantly
