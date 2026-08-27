@@ -7,14 +7,10 @@
  *   Every display primitive this module needs already exists —
  *   oled_show_sensors(), oled_show_gyro(), oled_show_battery() were
  *   clearly built for exactly these four DIP modes, and maze_print()
- *   already handles the ASCII wall-map dump. diagnostics.c contributes
- *   no new display logic of its own; it's the live-loop orchestration
- *   that reads fresh sensor data, calls the right oled_show_*()
- *   function, once per
- *   DIAG_REFRESH_MS, until the operator presses the button to exit
- *   (except MODE_PRINT_MAZE, which is a one-shot dump — a wall map
- *   doesn't change from one moment to the next while the robot is
- *   sitting still on a bench).
+ *   contributes no new display logic of its own; it's the live-loop orchestration
+ *   that reads fresh sensor data and calls the right oled_show_*()
+ *   function, once per DIAG_REFRESH_MS, until the operator presses the button to exit
+ *   (except MODE_PRINT_MAZE, which is a one-shot dump).
  *
  *     MODE_MONITOR (0)       diagnostics_run_monitor()
  *     MODE_GYRO_DEBUG (11)   diagnostics_run_gyro_debug()
@@ -44,14 +40,6 @@ extern "C" {
 #endif
 
 /**
- * @brief  Initialise the diagnostics module.
- * @details Currently stateless. Kept as its own init call for
- *          lifecycle consistency with every other module.
- * @return MM_OK always.
- */
-MmResult_t diagnostics_init(void);
-
-/**
  * @brief  MODE_MONITOR — live IR sensor view on OLED.
  * @details Refreshes oled_show_sensors() every DIAG_REFRESH_MS until the
  *          button is pressed.
@@ -70,10 +58,7 @@ MmResult_t diagnostics_run_monitor(void);
 MmResult_t diagnostics_run_gyro_debug(void);
 
 /**
- * @brief  MODE_PRINT_MAZE — one-shot ASCII dump of the known wall map
- *         and flood-fill distances.
- * @details Runs floodfill_run(FLOOD_TO_GOAL) so the distances
- *          reflect the current map, then calls maze_print().
+ * @brief  MODE_PRINT_MAZE — runs floodfill and prepares maze map.
  * @return MM_OK always.
  */
 MmResult_t diagnostics_print_maze(void);
