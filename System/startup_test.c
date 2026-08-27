@@ -47,6 +47,8 @@ static bool reading_at_rail(uint16_t v)
 
 static bool check_ir(void)
 {
+    ir_sample_all();
+
     IrSnapshot_t snap;
     ir_get_snapshot(&snap);
 
@@ -80,7 +82,9 @@ static void check_motors_and_encoders(StartupTestResult_t *result)
     motors_enable();
     motors_set(STARTUP_TEST_PWM, STARTUP_TEST_PWM);
     HAL_Delay(STARTUP_TEST_MOTOR_MS);
-    motors_coast();
+    motors_brake();
+    HAL_Delay(50U);
+    motors_disable();
 
     result->enc_left_delta  = enc_left_count();
     result->enc_right_delta = enc_right_count();
