@@ -44,14 +44,6 @@ extern "C" {
 #endif
 
 /**
- * @brief  Initialise the speedrun module.
- * @details Currently stateless between runs. Kept as its own init call
- *          for lifecycle consistency with every other module.
- * @return MM_OK always.
- */
-MmResult_t speedrun_init(void);
-
-/**
  * @brief  Compute the optimised path from the currently-known maze map
  *         and execute it at @p speed_mmps.
  *
