@@ -1,32 +1,20 @@
 /**
  * @file    explorer.c
- * @brief   MicroMaze 3 · Flood-fill maze search and return-to-start —
- *          implementation.
- * @details See explorer.h for the full design rationale, including why
- *          the search and return phases are kept as separate functions
- *          and why every cell re-runs floodfill_run() unconditionally.
+ * @brief   MicroMaze 3 · Flood-fill maze search and return-to-start — implementation.
  *
  * @author  VDawn
  * @date    2026
  */
+
 #include "explorer.h"
 #include "config.h"
 #include "error.h"
 #include "motion.h"
 #include "maze.h"
 #include "floodfill.h"
-#include "path_optimizer.h"  /* path_optimizer_turn_type(), MoveType_t */
+#include "path_optimizer.h"
 #include "safety.h"
 
-/* ═══════════════════════════════════════════════════════════════════════
- * Internal helpers
- * ═══════════════════════════════════════════════════════════════════════ */
-
-/**
- * @brief  Turn (if needed) to face @p dir, then advance one cell,
- *         keeping the physical robot (motion.c) and the tracked
- *         position/heading (maze.c) in sync.
- */
 static void explorer_step_toward(uint8_t dir)
 {
     MoveType_t turn = path_optimizer_turn_type(maze.robot_heading, dir);
@@ -54,7 +42,6 @@ static void explorer_step_toward(uint8_t dir)
         case MOVE_DONE:
         case MOVE_FORWARD:
         default:
-            /* Already facing dir — no turn needed. */
             break;
     }
 
@@ -62,19 +49,6 @@ static void explorer_step_toward(uint8_t dir)
     maze_advance(dir);
 }
 
-/**
- * @brief  Shared per-cell loop body for both phases: record walls,
- *         re-flood, check the target, pick a direction, and step.
- *
- * @param  mode        Flood-fill seeding mode for this phase.
- * @param  at_target    Returns true when the current cell is where this
- *                      phase is trying to reach.
- * @param  phase_name  Short label ("search"/"return").
- *
- * @return MM_OK           at_target() became true.
- * @return MM_ERR_GENERAL  Cell limit reached, no valid move, or a
- *                        safety trip aborted the loop.
- */
 static MmResult_t explorer_run_loop(FloodMode_t mode, bool (*at_target)(void),
                                      const char *phase_name)
 {
@@ -116,20 +90,12 @@ static bool at_start(void)
     return (maze.robot_row == START_ROW) && (maze.robot_col == START_COL);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
- * Public API
- * ═══════════════════════════════════════════════════════════════════════ */
-
 MmResult_t explorer_search_to_goal(void)
 {
     MmResult_t result = explorer_run_loop(FLOOD_TO_GOAL, at_goal, "search");
 
     if (result == MM_OK)
     {
-        /* Persist now — enough map data exists to compute at least one
-         * path to the goal, and a standalone speed-run mode selected
-         * after a reboot needs this even if the operator never runs
-         * explorer_return_to_start() in the same session. */
         (void)maze_save_to_flash();
     }
 
@@ -142,8 +108,6 @@ MmResult_t explorer_return_to_start(void)
 
     if (result == MM_OK)
     {
-        /* More wall data has typically accumulated on the way back —
-         * save again so speed runs benefit from the fuller map. */
         (void)maze_save_to_flash();
     }
 
