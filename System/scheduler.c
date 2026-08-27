@@ -11,7 +11,11 @@
  *          THE TWO EXECUTION CONTEXTS IN THIS FIRMWARE
  *          ─────────────────────────────────────────────
  *          Context 1 — TIM5 ISR at 1 kHz (motion_1khz_tick)
- *           *          Context 2 — Main loop (scheduler_tick inside modes.c)
+ *            Handles: IR sensors, gyro, encoders, PID, motor output.
+ *            Latency requirement: < 1 ms.
+ *            Must never block.
+ *
+ *          Context 2 — Main loop (scheduler_tick inside modes.c)
  *            Handles: battery poll, OLED refresh, safety watchdog.
  *            Latency requirement: best-effort, ≤ 10 ms acceptable.
  *            May block briefly (OLED I2C ~2.6 ms).
@@ -75,7 +79,6 @@ static SchedSlot_t s_slots[SCHED_MAX_TASKS];
  *
  * @details Calls battery_update() which reads the shared ADC DMA slot
  *          from ir.c, applies the IIR filter, and updates the health state.
- *          Disables motors if voltage drops to CRITICAL state.
  */
 static void battery_update_task(void)
 {
@@ -97,7 +100,6 @@ static void battery_update_task(void)
  */
 static void oled_refresh_task(void)
 {
-#if OLED_ENABLED
     if (!motion_is_idle())
     {
         /* During a run — show motion data */
@@ -117,7 +119,6 @@ static void oled_refresh_task(void)
         );
     }
     /* When idle: modes.c updates the display explicitly */
-#endif
 }
 
 /**
@@ -288,9 +289,9 @@ uint8_t scheduler_task_count(void)
 }
 
 /**
- * @brief  Print all registered tasks (stub when logging disabled).
+ * @brief  Print all registered tasks (debug stub).
  */
 void scheduler_print_tasks(void)
 {
-    /* No-op: logging is disabled */
+    /* No active debug transport. */
 }
