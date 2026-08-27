@@ -40,12 +40,6 @@
  *            Page 6 (row 6): Battery line — voltage and percent
  *            Page 7 (row 7): Error line   — last error code
  *
- *          COMPILE-TIME DISABLE
- *          ─────────────────────
- *          When OLED_ENABLED = 0 in config.h, all oled_xxx() calls
- *          become empty static inline stubs — zero Flash, zero RAM,
- *          zero I2C bus time.  No #ifdef guards needed at call sites.
- *
  *          NON-BLOCKING REFRESH
  *          ─────────────────────
  *          oled_flush() blocks for approximately 8 × (129 byte I2C burst)
@@ -55,14 +49,11 @@
  *
  *          DEPENDENCIES
  *          ─────────────
- *          config.h — OLED_ENABLED, OLED_I2C_ADDR, OLED_WIDTH_PX,
- *                     OLED_HEIGHT_PX, OLED_PAGES, OLED_REFRESH_MS,
+ *          config.h — OLED_I2C_ADDR, OLED_WIDTH_PX, OLED_HEIGHT_PX,
+ *                     OLED_PAGES, OLED_REFRESH_MS,
  *                     FW_VERSION_MAJOR/MINOR/PATCH, all MODE_xxx,
  *                     SPD_RUN1/2/3
  *          main.h   — hi2c1 extern
- *
- * @note    This file guards all its content with #if OLED_ENABLED so
- *          the entire module is excluded from the build when disabled.
  *
  * @author  VDawn
  * @date    2026
@@ -79,14 +70,6 @@ extern "C" {
 #include "error.h"
 #include <stdint.h>
 #include <stdbool.h>
-
-/* =========================================================================
- * BUILD-TIME ENABLE GUARD
- * All content below is compiled only when OLED_ENABLED = 1.
- * When OLED_ENABLED = 0 the block at the bottom provides empty stubs.
- * ======================================================================= */
-
-#if OLED_ENABLED
 
 /* =========================================================================
  * TYPES
@@ -517,67 +500,10 @@ MmResult_t oled_send_cmd(uint8_t cmd);
  *
  * @details Returns a pointer to the 1024-byte framebuffer.
  *          Indexed as buf[page][col].  Read-only use only.
- *          Valid until the next oled_clear() call.
  *
  * @return const uint8_t*  Pointer to framebuffer byte 0 (page 0, col 0).
  */
 const uint8_t *oled_get_framebuffer(void);
-
-/* =========================================================================
- * DISABLED STUBS  (OLED_ENABLED = 0)
- * ======================================================================= */
-
-#else /* !OLED_ENABLED */
-
-/* When OLED is disabled at compile time, all functions become empty
- * inline stubs.  No Flash, no RAM, no I2C traffic.
- * Call sites need no #ifdef guards.                                     */
-
-#include <stdarg.h>
-
-typedef struct { void *hi2c; uint8_t i2c_addr_8; } OledHandle_t;
-
-static inline MmResult_t oled_init(void *h)           { (void)h; return MM_OK; }
-static inline void oled_clear(void)                    {}
-static inline void oled_clear_flush(void)              {}
-static inline MmResult_t oled_flush(void)              { return MM_OK; }
-static inline void oled_pixel(uint8_t x,uint8_t y,bool on)
-                                                       { (void)x;(void)y;(void)on; }
-static inline void oled_hline(uint8_t x,uint8_t y,uint8_t l,bool on)
-                                                       { (void)x;(void)y;(void)l;(void)on; }
-static inline void oled_rect_fill(uint8_t x,uint8_t y,uint8_t w,uint8_t h,bool on)
-                                                       { (void)x;(void)y;(void)w;(void)h;(void)on; }
-static inline void oled_char(uint8_t x,uint8_t p,char c)
-                                                       { (void)x;(void)p;(void)c; }
-static inline void oled_str(uint8_t x,uint8_t p,const char *s)
-                                                       { (void)x;(void)p;(void)s; }
-static inline void oled_printf(uint8_t x,uint8_t p,const char *f,...){ (void)x;(void)p;(void)f; }
-static inline void oled_line(uint8_t p,const char *s) { (void)p;(void)s; }
-static inline void oled_linef(uint8_t p,const char *f,...){ (void)p;(void)f; }
-static inline void oled_show_boot(void)                {}
-static inline void oled_show_boot_complete(uint8_t m,float v,bool c)
-                                                       { (void)m;(void)v;(void)c; }
-static inline void oled_show_mode(uint8_t m)           { (void)m; }
-static inline void oled_show_sensors(const uint16_t *d,bool f,bool l,bool r,float fe,float se)
-                                                       { (void)d;(void)f;(void)l;(void)r;(void)fe;(void)se; }
-static inline void oled_show_motion(float a,float b,float c,float d,float e,
-                                    uint8_t f,uint8_t g,uint8_t h,uint32_t i,float j)
-                                                       { (void)a;(void)b;(void)c;(void)d;(void)e;
-                                                         (void)f;(void)g;(void)h;(void)i;(void)j; }
-static inline void oled_show_gyro(float a,float b,float c)
-                                                       { (void)a;(void)b;(void)c; }
-static inline void oled_show_cal(uint8_t s,const uint16_t *t){ (void)s;(void)t; }
-static inline void oled_show_battery(float v,uint8_t p){ (void)v;(void)p; }
-static inline void oled_show_maze(uint8_t r,uint8_t c,uint8_t h,uint8_t f,
-                                  bool wf,bool wl,bool wr)
-                                                       { (void)r;(void)c;(void)h;(void)f;
-                                                         (void)wf;(void)wl;(void)wr; }
-static inline void oled_show_message(const char *a,const char *b){ (void)a;(void)b; }
-static inline void oled_show_error(const char *m,int32_t c){ (void)m;(void)c; }
-static inline MmResult_t oled_send_cmd(uint8_t c)     { (void)c; return MM_OK; }
-static inline const uint8_t *oled_get_framebuffer(void){ return NULL; }
-
-#endif /* OLED_ENABLED */
 
 #ifdef __cplusplus
 }
