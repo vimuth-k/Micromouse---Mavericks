@@ -99,9 +99,11 @@ static void run_straight_test(void)
 }
 
 /**
- * @brief  DIP Mode 6: Flood-fill search to the goal, then return to start.
+ * @brief  Execute full exploration to the goal and return to the start cell.
+ * @details Drives state transitions: SEARCHING -> RETURNING -> IDLE (or ERROR on failure).
+ * @return MM_OK on complete success, or error code on failure.
  */
-static void run_search(void)
+static MmResult_t execute_search_and_return(void)
 {
     (void)state_machine_transition(ROBOT_STATE_SEARCHING);
     MmResult_t result = explorer_search_to_goal();
@@ -115,13 +117,22 @@ static void run_search(void)
     if (result == MM_OK)
     {
         (void)state_machine_transition(ROBOT_STATE_IDLE);
-        modes_idle_forever("SEARCH", "COMPLETE");
     }
     else
     {
         (void)state_machine_transition(ROBOT_STATE_ERROR);
-        modes_idle_forever("SEARCH", "FAILED");
     }
+
+    return result;
+}
+
+/**
+ * @brief  DIP Mode 6: Flood-fill search to the goal, then return to start.
+ */
+static void run_search(void)
+{
+    MmResult_t result = execute_search_and_return();
+    modes_idle_forever("SEARCH", (result == MM_OK) ? "COMPLETE" : "FAILED");
 }
 
 /**
@@ -149,23 +160,12 @@ static void run_speed(float speed_mmps)
  */
 static void run_auto_qualifier(void)
 {
-    (void)state_machine_transition(ROBOT_STATE_SEARCHING);
-    MmResult_t result = explorer_search_to_goal();
-
-    if (result == MM_OK)
-    {
-        (void)state_machine_transition(ROBOT_STATE_RETURNING);
-        result = explorer_return_to_start();
-    }
-
+    MmResult_t result = execute_search_and_return();
     if (result != MM_OK)
     {
-        (void)state_machine_transition(ROBOT_STATE_ERROR);
         modes_idle_forever("AUTO QUALIFIER", "SEARCH FAILED");
         return;
     }
-
-    (void)state_machine_transition(ROBOT_STATE_IDLE);
 
     const float speeds[3] = { SPD_RUN1, SPD_RUN2, SPD_RUN3 };
 
