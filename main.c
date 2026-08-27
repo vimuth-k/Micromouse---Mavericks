@@ -64,7 +64,6 @@
 #include "motion.h"
 #include "turn.h"
 #include "trajectory.h"
-#include "wall_follow.h"
 
 /* Navigation */
 #include "maze.h"
@@ -263,7 +262,6 @@ static MmResult_t modules_init(void)
      * inside trajectory.c/turn.c at the start of an actual movement, not
      * a one-time boot initializer. Nothing else in the codebase calls
      * it externally either. */
-    wall_follow_init();
 
     /* ── Navigation layer ──────────────────────────────────── */
     maze_init();
