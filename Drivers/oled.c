@@ -55,17 +55,9 @@
  *            Bit 6 (D/C): 0 = command, 1 = data.
  *          We always use Co=0 (streaming) so page flushes send all 128
  *          column bytes in one HAL_I2C_Master_Transmit call.
- *
- * @note    Compiled only when OLED_ENABLED = 1 in config.h.
- *
- * @author  VDawn
- * @date    2026
  */
 
 #include "oled.h"
-
-#if OLED_ENABLED
-
 #include "config.h"
 #include "main.h"
 #include "error.h"
@@ -662,5 +654,3 @@ const uint8_t *oled_get_framebuffer(void)
 {
     return &s_fb[0][0];
 }
-
-#endif /* OLED_ENABLED */
