@@ -22,7 +22,7 @@
  *  Control loop TIM5        (1 kHz interrupt, no pin)
  *  IR receivers ADC1 DMA    PA2–PA7, PB0  (7-channel scan, ranks 1–7)
  *  IMU MPU6500  I2C1        PB8 (SCL) / PB9 (SDA)
- *  IMU INT      EXTI IN     PC13  (wired, not yet consumed by imu.c)
+ *  IMU INT      GPIO IN     PC13  (polled via 1 kHz ISR)
  *  IR emitters  GPIO OUT    6 independent: PA10,PA11,PA15,PB1,PB2,PB3
  *  Motor dir    GPIO OUT    PB12,PB13 (left) / PB14,PB15 (right)
  *  Motor STBY   GPIO OUT    PB7
@@ -439,15 +439,9 @@ extern "C" {
 #define MPU6500_I2C_ADDR_8BIT   (MPU6500_I2C_ADDR << 1U)
 
 /**
- * MPU6500 INT — PC13 — EXTI input, plain GPIO (no timer/analog AF exists
- * on PC13). Wired for future use; imu.c currently polls the IMU from the
- * 1 kHz TIM5 ISR and does not yet attach an EXTI callback to this pin.
- * PC13 output-drive limits (2 MHz / 3 mA, no current-source use) do not
- * apply here since this is an input.
- *
- * CubeMX: PC13 → GPIO_EXTI13, no pull (MPU6500 INT is push-pull by
- * default register config). Configure NVIC EXTI15_10 if/when imu.c
- * moves to interrupt-driven data-ready reads.
+ * MPU6500 INT — PC13 — GPIO input. The firmware polls IMU data at 1 kHz
+ * via TIM5 ISR; this pin definition is retained for hardware mapping and
+ * pin-state reading.
  */
 #define IMU_INT_PORT             GPIOC
 #define IMU_INT_PIN              GPIO_PIN_13
