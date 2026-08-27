@@ -59,7 +59,7 @@ typedef struct
     bool  calibration_ok;      /**< Valid IR calibration present in Flash.  */
     bool  motor_left_ok;       /**< Left encoder registered motion.         */
     bool  motor_right_ok;      /**< Right encoder registered motion.        */
-    float battery_voltage_v;   /**< Measured value, for the OLED/log line.  */
+    float battery_voltage_v;   /**< Measured value, for the OLED display.   */
     int32_t enc_left_delta;    /**< Encoder counts seen during the spin.    */
     int32_t enc_right_delta;   /**< Encoder counts seen during the spin.    */
 } StartupTestResult_t;
